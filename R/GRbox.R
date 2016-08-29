@@ -56,12 +56,22 @@ GRbox <- function(fitData, GRmetric, groupVariable, pointColor,
                   factors = "all", plotly = TRUE) {
   data = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
                t(SummarizedExperiment::assay(fitData)))
+  bottom_margin = max(nchar(data[[groupVariable]]), na.rm = TRUE)
   data[[groupVariable]] = factor(data[[groupVariable]])
   if(!identical(factors, "all")) {
     if(length(intersect(factors, data[[groupVariable]])) != length(factors)) {
       stop('Factors must be values of the grouping variable')
     }
     data = data[data[[groupVariable]] %in% factors, ]
+    bottom_margin = max(nchar(factors), na.rm = TRUE)
+  }
+  if(GRmetric == "GR50") {
+    data$`log10(GR50)` = log10(data$GR50)
+    GRmetric = "log10(GR50)"
+  }
+  if(GRmetric == "Hill") {
+    data$`log2(Hill)` = log2(data$Hill)
+    GRmetric = "log2(Hill)"
   }
   if(plotly == TRUE) {
     p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
@@ -73,8 +83,11 @@ GRbox <- function(fitData, GRmetric, groupVariable, pointColor,
       ggplot2::xlab('') + ggplot2::ylab(GRmetric)
     q = plotly::plotly_build(p)
     q$layout$xaxis$tickangle = -45
-    bottom_margin = max(nchar(factors), na.rm = TRUE)
-    q$layout$margin$b = 10 + 8*bottom_margin
+    q$layout$margin$b = 15 + 6*bottom_margin
+    if(bottom_margin > 10) {
+      left_margin = q$layout$margin$l + (bottom_margin-10)*6
+      q$layout$margin$l = left_margin
+    }
     return(q)
   } else {
     p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
