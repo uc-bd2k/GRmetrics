@@ -295,12 +295,12 @@ GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB',
           plotly = FALSE)
 
 # Draw boxplots
-GRbox(output1, GRmetric ='GRinf', groupVariable = 'cell_line', 
+GRbox(output1, metric ='GRinf', groupVariable = 'cell_line', 
       pointColor = 'agent')
-GRbox(output1, GRmetric ='GRinf', groupVariable = 'cell_line', 
+GRbox(output1, metric ='GRinf', groupVariable = 'cell_line', 
       pointColor = 'agent',
       factors = c('BT20', 'MCF10A'))
-GRbox(output1, GRmetric ='GRinf', groupVariable = 'cell_line', 
+GRbox(output1, metric ='GRinf', groupVariable = 'cell_line', 
       pointColor = 'agent',
       factors = c('BT20', 'MCF10A'), plotly = FALSE)
 ```
