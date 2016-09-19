@@ -15,6 +15,15 @@
 #' @param factors a vector of values of "groupVariable" of data that define
 #' which variables to make boxplots for. By default, a separate boxplot is made
 #' for each unique value of groupVariable.
+#' @param wilA one value or a vector of values from "factors", i.e. 
+#' a subset of the boxplots. If specified, a one-sided Wilcoxon rank sum test 
+#' (wilcox.test) will be performed between "wilA" and "wilB" and 
+#' the results will be displayed on the figure. The null hypothesis 
+#' that the values from "wilA" and "wilB" have the same mean will 
+#' be tested against the alternative hypothesis that the mean of the 
+#' "wilB" values is greater than that of the "wilA" values.
+#' @param wilB one value or a vector of values from "factors", i.e. 
+#' a subset of the boxplots (not overlapping "wilA").
 #' @param plotly a logical value indicating whether to output a ggplot2 graph
 #' or an interactive ggplotly graph
 #'
@@ -56,7 +65,7 @@
 #' @export
 
 GRbox <- function(fitData, metric, groupVariable, pointColor,
-                  factors = "all", plotly = TRUE) {
+                  factors = "all", wilA = NULL, wilB = NULL, plotly = TRUE) {
   data = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
                t(SummarizedExperiment::assay(fitData)))
   #bottom_margin = max(nchar(data[[groupVariable]]), na.rm = TRUE)
@@ -67,6 +76,9 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
     }
     data = data[data[[groupVariable]] %in% factors, ]
     #bottom_margin = max(nchar(factors), na.rm = TRUE)
+  }
+  if(length(intersect(wilA, wilB)) > 0) {
+    stop('wilA and wilB must not overlap.')
   }
   if(metric == "GR50") {
     data$`log10(GR50)` = log10(data$GR50)
@@ -84,6 +96,24 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
     data$`log2(h)` = log2(data$h)
     metric = "log2(h)"
   }
+  # Get rid of infinite values
+  fin = is.finite(data[[metric]])
+  data = data[fin,]
+  if(!is.null(wilA) & !is.null(wilB)) {
+    for(i in 1:length(wilB)) {
+      data[[groupVariable]] = relevel(data[[groupVariable]], wilB[i])
+    }
+    for(i in 1:length(wilA)) {
+      data[[groupVariable]] = relevel(data[[groupVariable]], wilA[i])
+    }
+    # Perform Wilcoxon rank sum test
+    rowsA = data[[groupVariable]] %in% wilA
+    rowsB = data[[groupVariable]] %in% wilB
+    wil_dataA = data[rowsA,metric]
+    wil_dataB = data[rowsB,metric]
+    wil = wilcox.test(x = wil_dataA, y = wil_dataB, alternative = "less")
+    wil_pval = prettyNum(wil$p.value, digits = 2)
+  }
   if(plotly == TRUE) {
     p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
                           y = metric, text = 'experiment'))
@@ -93,6 +123,84 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
       ggplot2::aes_string(colour = pointColor)) +
       ggplot2::xlab('') + ggplot2::ylab(metric)
     q = plotly::plotly_build(p)
+    if(!is.null(wilA) & !is.null(wilB)) {
+      # Get y range:
+      top_y = q[[2]]$yaxis$range[2]
+      bottom_y = q[[2]]$yaxis$range[1]
+      total_y_range = top_y - bottom_y
+      # Get top of boxplot whiskers
+      whiskers = NULL
+      len = length(wilA) + length(wilB)
+      for(i in 1:len) {
+        whiskers[i] = fivenum(q[[1]][[i]]$y)[5]
+      }
+      top_whisker = max(whiskers, na.rm = TRUE)
+      y_range = (top_y - top_whisker)/total_y_range
+      if(y_range < .25) {
+        top_y = top_whisker + .25*total_y_range
+      }
+      lh = top_whisker + total_y_range*(.1)
+      bump = total_y_range*(.05)
+      ll = lh - bump
+      lenA = length(wilA)
+      lenB = length(wilB)
+      pval = paste("p =", wil_pval)
+      if(lenA == 1 & lenB == 1) {
+        p = p + ggplot2::annotate("text", x = 1.5, y = lh + bump/2, 
+                                  label = pval) + 
+          ggplot2::geom_segment(x = 1, y = lh, xend = 2, yend = lh) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh) + 
+          ggplot2::geom_segment(x = 2, y = ll, xend = 2, yend = lh)
+        rm(q)
+        q = plotly::plotly_build(p)
+      } else if(lenA > 1 & lenB == 1) {
+        p = p + ggplot2::annotate("text", x = ((lenA + 1) + ((lenA+1)/2))/2,
+                         y = lh + 2*bump, label = pval) +
+          ggplot2::geom_segment(x = 1, y = lh, xend = lenA, yend = lh) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh) + 
+          ggplot2::geom_segment(x = lenA, y = ll, xend = lenA, yend = lh) +
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh + bump, xend = lenA + 1,
+                       yend = lh + bump) + 
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh, xend = (lenA+1)/2,
+                       yend = lh + bump) + 
+          ggplot2::geom_segment(x = lenA+1, y = ll, xend = lenA+1,
+                       yend = lh + bump)
+        rm(q)
+        q = plotly::plotly_build(p)
+      } else if(lenA == 1 & lenB > 1) {
+        p = p + ggplot2::annotate("text", x = 1.25 + .25*lenB, 
+                y = lh + 2*bump, label = pval) +
+          ggplot2::geom_segment(x = 1, y = lh+bump, xend = .5*lenB + 1.5,
+                                yend = lh+bump) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh+bump) + 
+          ggplot2::geom_segment(x = 1.5+.5*lenB, y = lh, xend = 1.5+.5*lenB, 
+                                yend = lh+bump) +
+          ggplot2::geom_segment(x = 2, y = lh, xend = lenB + 1, yend = lh) + 
+          ggplot2::geom_segment(x = 2, y = ll, xend = 2, yend = lh) + 
+          ggplot2::geom_segment(x = lenB+1, y = ll, xend = lenB+1, yend = lh)
+        rm(q)
+        q = plotly::plotly_build(p)
+      } else if(lenA > 1 & lenB > 1) {
+        p = p + ggplot2::annotate("text", x = .25*(lenB-1)+.75*(lenA+1), 
+                y = lh + 2*bump, label = pval) +
+          ggplot2::geom_segment(x = 1, y = lh, xend = lenA, yend = lh) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh) + 
+          ggplot2::geom_segment(x = lenA, y = ll, xend = lenA, yend = lh) +
+          ggplot2::geom_segment(x = lenA+1, y = lh, xend = lenA+lenB,
+                                yend = lh) + 
+          ggplot2::geom_segment(x = lenA+1, y = ll, xend = lenA+1, yend = lh) +
+          ggplot2::geom_segment(x = lenA+lenB, y = ll, xend = lenA+lenB,
+                                yend = lh) +
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh+bump, 
+                                xend = (lenA+1)+((lenB-1)/2), yend = lh+bump) +
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh, xend = (lenA+1)/2, 
+                       yend = lh+bump) +
+          ggplot2::geom_segment(x = (lenA+1)+((lenB-1)/2), y = lh, 
+                                xend = (lenA+1)+((lenB-1)/2), yend = lh+bump)
+        rm(q)
+        q = plotly::plotly_build(p)
+      }
+    }
     bottom_margin = max(nchar(q$layout$xaxis$ticktext), na.rm = TRUE)
     left = nchar(q$layout$xaxis$ticktext[1])
     q$layout$xaxis$tickangle = -45
@@ -110,9 +218,80 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
       show.legend = FALSE) + ggplot2::geom_jitter(
         width = 0.5, ggplot2::aes_string(colour = pointColor)) +
       ggplot2::xlab('') + ggplot2::ylab(metric) +
-      ggplot2::theme_grey(base_size = 18) +
+      ggplot2::theme_grey(base_size = 14) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, 
                                                          vjust = 1, hjust=1))
+    if(!is.null(wilA) & !is.null(wilB)) {
+      q = plotly::plotly_build(p)
+      # Get y range:
+      top_y = q[[2]]$yaxis$range[2]
+      bottom_y = q[[2]]$yaxis$range[1]
+      total_y_range = top_y - bottom_y
+      # Get top of boxplot whiskers
+      whiskers = NULL
+      len = length(wilA) + length(wilB)
+      for(i in 1:len) {
+        whiskers[i] = fivenum(q[[1]][[i]]$y)[5]
+      }
+      top_whisker = max(whiskers, na.rm = TRUE)
+      y_range = (top_y - top_whisker)/total_y_range
+      if(y_range < .25) {
+        top_y = top_whisker + .25*total_y_range
+      }
+      lh = top_whisker + total_y_range*(.1)
+      bump = total_y_range*(.05)
+      ll = lh - bump
+      lenA = length(wilA)
+      lenB = length(wilB)
+      pval = paste("p =", wil_pval)
+      if(lenA == 1 & lenB == 1) {
+        p = p + ggplot2::annotate("text", x = 1.5, y = lh + bump/2, 
+                                  label = pval) + 
+          ggplot2::geom_segment(x = 1, y = lh, xend = 2, yend = lh) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh) + 
+          ggplot2::geom_segment(x = 2, y = ll, xend = 2, yend = lh)
+      } else if(lenA > 1 & lenB == 1) {
+        p = p + ggplot2::annotate("text", x = ((lenA + 1) + ((lenA+1)/2))/2,
+                                  y = lh + 2*bump, label = pval) +
+          ggplot2::geom_segment(x = 1, y = lh, xend = lenA, yend = lh) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh) + 
+          ggplot2::geom_segment(x = lenA, y = ll, xend = lenA, yend = lh) +
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh + bump, xend = lenA + 1,
+                                yend = lh + bump) + 
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh, xend = (lenA+1)/2,
+                                yend = lh + bump) + 
+          ggplot2::geom_segment(x = lenA+1, y = ll, xend = lenA+1,
+                                yend = lh + bump)
+      } else if(lenA == 1 & lenB > 1) {
+        p = p + ggplot2::annotate("text", x = 1.25 + .25*lenB, 
+                                  y = lh + 2*bump, label = pval) +
+          ggplot2::geom_segment(x = 1, y = lh+bump, xend = .5*lenB + 1.5,
+                                yend = lh+bump) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh+bump) + 
+          ggplot2::geom_segment(x = 1.5+.5*lenB, y = lh, xend = 1.5+.5*lenB, 
+                                yend = lh+bump) +
+          ggplot2::geom_segment(x = 2, y = lh, xend = lenB + 1, yend = lh) + 
+          ggplot2::geom_segment(x = 2, y = ll, xend = 2, yend = lh) + 
+          ggplot2::geom_segment(x = lenB+1, y = ll, xend = lenB+1, yend = lh)
+      } else if(lenA > 1 & lenB > 1) {
+        p = p + ggplot2::annotate("text", x = .25*(lenB-1)+.75*(lenA+1), 
+                                  y = lh + 2*bump, label = pval) +
+          ggplot2::geom_segment(x = 1, y = lh, xend = lenA, yend = lh) + 
+          ggplot2::geom_segment(x = 1, y = ll, xend = 1, yend = lh) + 
+          ggplot2::geom_segment(x = lenA, y = ll, xend = lenA, yend = lh) +
+          ggplot2::geom_segment(x = lenA+1, y = lh, xend = lenA+lenB,
+                                yend = lh) + 
+          ggplot2::geom_segment(x = lenA+1, y = ll, xend = lenA+1, yend = lh) +
+          ggplot2::geom_segment(x = lenA+lenB, y = ll, xend = lenA+lenB,
+                                yend = lh) +
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh+bump, 
+                                xend = (lenA+1)+((lenB-1)/2), yend = lh+bump) +
+          ggplot2::geom_segment(x = (lenA+1)/2, y = lh, xend = (lenA+1)/2, 
+                                yend = lh+bump) +
+          ggplot2::geom_segment(x = (lenA+1)+((lenB-1)/2), y = lh, 
+                                xend = (lenA+1)+((lenB-1)/2), yend = lh+bump)
+      }
+    }
     return(p)
   }
 }
