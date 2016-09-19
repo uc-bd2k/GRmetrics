@@ -62,6 +62,8 @@
 #' GRbox(output1, metric ='GRinf',
 #' groupVariable = 'cell_line', pointColor = 'cell_line' ,
 #' factors = c('BT20', 'MCF10A'), plotly = FALSE)
+#' GRbox(output1, metric = 'GR50', groupVariable = 'cell_line',
+#' pointColor = 'cell_line', wilA = "BT20", wilB = c("MCF7","MCF10A"))
 #' @export
 
 GRbox <- function(fitData, metric, groupVariable, pointColor,
