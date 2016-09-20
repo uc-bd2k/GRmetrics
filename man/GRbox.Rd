@@ -12,7 +12,7 @@ GRbox(fitData, metric, groupVariable, pointColor, factors = "all",
 function.}
 
 \item{metric}{the GR metric (GR50, GRinf, h_GR, GRmax, GEC50, or GR_AOC) 
-or traditional metric (IC50, Einf, h, Emax, EC50, or AUC) that will be used  
+or traditional metric (IC50, Einf, h, Emax, EC50, or AUC) that will be used
 for the boxplot.}
 
 \item{groupVariable}{the name of the variable from data (e.g. drug,

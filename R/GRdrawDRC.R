@@ -51,7 +51,8 @@
 #' GRdrawDRC(drc_output, plotly = FALSE)
 #' @export
 
-GRdrawDRC <- function(fitData, metric = "GR", experiments = "all", min = "auto", max = "auto",
+GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
+                      min = "auto", max = "auto",
                       points = TRUE, curves = TRUE, plotly = TRUE) {
   if(points == FALSE & curves == FALSE) {
     stop('You must show either points or curves or both')
