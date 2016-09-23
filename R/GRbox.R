@@ -234,7 +234,7 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
       whiskers = NULL
       len = length(wilA) + length(wilB)
       for(i in 1:len) {
-        whiskers[i] = (q[[1]][[i]]$y)[5]
+        whiskers[i] = stats::fivenum(q[[1]][[i]]$y)[5]
       }
       top_whisker = max(whiskers, na.rm = TRUE)
       y_range = (top_y - top_whisker)/total_y_range

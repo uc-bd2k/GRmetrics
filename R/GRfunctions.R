@@ -461,18 +461,17 @@
 #' 'time'))
 #' # Overview of SummarizedExperiment output data
 #' output1
-#' # View GR metrics table
-#' assay(output1)
-#' # View details of each experiment
-#' colData(output1)
-#' # View descriptions of each GR metric (or goodness of fit measure)
 #' \dontrun{
-#' View(rowData(output1))
-#' }
+#' # View GR metrics table
+#' View(GRgetMetrics(output1))
+#' # View descriptions of each metric (or goodness of fit measure)
+#' View(GRgetDefs(output1))
 #' # View table of original data (converted to style of Case A) with GR values
-#' metadata(output1)[[1]]
+#' # and relative cell counts
+#' View(GRgetValues(output1))
 #' # View vector of grouping variables used for calculation
-#' metadata(output1)[[2]]
+#' GRgetGroupVars(output1)
+#' }
 #' # Load Case C (example 4) input
 #' # Same data, different format
 #' data("inputCaseC")
@@ -484,10 +483,10 @@
 #' # Extract data tables and export to .tsv or .csv
 #' \dontrun{
 #' # Write GR metrics parameter table to tab-separated text file
-#' write.table(assay(output1), file = "filename.tsv", quote = FALSE,
+#' write.table(GRgetMetrics(output1), file = "filename.tsv", quote = FALSE,
 #' sep = "\t", row.names = FALSE)
 #' # Write original data plus GR values to comma-separated file
-#' write.table(metadata(output1)[[1]], file = "filename.csv", quote = FALSE,
+#' write.table(GRgetValues(output1), file = "filename.csv", quote = FALSE,
 #' sep = ",", row.names = FALSE)
 #' }
 #' @export
@@ -506,11 +505,11 @@ GRfit = function(inputData, groupingVariables, case = "A",
   rownames(colData) = colData$experiment
   colData = S4Vectors::DataFrame(colData)
   
-  Metrics = c('GR50','GRmax','GR_AOC','GEC50','GRinf','h_GR',
+  Metric = c('GR50','GRmax','GR_AOC','GEC50','GRinf','h_GR',
               'r2_GR','pval_GR','flat_fit_GR', 
               'IC50', 'Emax', 'AUC', 'EC50','Einf', 'h', 
               'r2_IC', 'pval_IC', 'flat_fit_IC')
-  assays = parameter_table[ , Metrics]
+  assays = parameter_table[ , Metric]
   rownames(assays) = parameter_table$experiment
   assays = t(assays)
 
@@ -534,10 +533,10 @@ GRfit = function(inputData, groupingVariables, case = "A",
     "The p-value of the F-test comparing the fit of the (traditional) curve to a horizontal line fit",
     "For data that doesn't significantly fit better to a curve than a horizontal line fit, the y value (relative cell count) of the flat line"
                   )
-  rowData = cbind(Metrics, Description)
-  rownames(rowData) = Metrics
+  rowData = cbind(Metric, Description)
+  rownames(rowData) = Metric
   rowData = S4Vectors::DataFrame(rowData)
-  rowData$Metrics = as.character(rowData$Metrics)
+  rowData$Metric = as.character(rowData$Metric)
   rowData$Description = as.character(rowData$Description)
 
   output = SummarizedExperiment::SummarizedExperiment(assays = assays,

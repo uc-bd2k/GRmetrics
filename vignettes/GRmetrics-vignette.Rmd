@@ -173,6 +173,21 @@ value(s).
 points used to make these boxplots and can color them according to another 
 grouping variable.
 
+The package also contains 4 accessor functions, which extract data from the 
+SummarizedExperiment object created by **GRfit**. These functions are: 
+**GRgetMetrics**, **GRgetDefs**, **GRgetValues**, and **GRgetGroupVars**.
+
+- **GRgetMetrics**  this function returns a table of GR metrics and 
+traditional metrics along with goodness of fit measures. It also identifies 
+each fit as flat or sigmoidal.
+- **GRgetDefs** this function returns a table containing the definition of 
+each GR metric, traditional metric, and goodness of fit measure calculated.
+- **GRgetValues** this function returns a table of the original data (in the 
+form of "Case A") with columns for GR values and relative cell counts.
+- **GRgetGroupVars**   this function returns a vector of the grouping 
+variables used to create the object. These are the variables in the dataset 
+that are not averaged over.
+
 # Examples
 
 ```{r, include = FALSE}
@@ -210,40 +225,33 @@ drc_output
 Review output table of GR metrics parameters
 
 ```{r}
-assay(drc_output)
-```
-
-View details of each experiment
-
-```{r}
-colData(drc_output)
+head(GRgetMetrics(drc_output))
 ```
 
 View descriptions of each GR metric (or goodness of fit measure)
 
 ```
-View(rowData(drc_output))
+View(GRgetDefs(drc_output))
 ```
 
 Review output table of GR values
 
 ```{r}
-head(metadata(drc_output)[[1]])
+head(GRgetValues(drc_output))
 ```
 
 View grouping variables used for calculation
 
 ```{r}
-metadata(drc_output)[[2]]
-
+GRgetGroupVars(drc_output)
 ```
 You can also export your results. Here are two examples:
 ```r
 # Write GR metrics parameter table to tab-separated text file
-write.table(assay(drc_output), file = "filename.tsv", quote = FALSE,
+write.table(GRgetMetrics(drc_output), file = "filename.tsv", quote = FALSE,
 sep = "\t", row.names = FALSE)
 # Write original data plus GR values to comma-separated file
-write.table(metadata(drc_output)[[1]], file = "filename.csv", quote = FALSE,
+write.table(GRgetValues(drc_output), file = "filename.csv", quote = FALSE,
 sep = ",", row.names = FALSE)
 ```
 

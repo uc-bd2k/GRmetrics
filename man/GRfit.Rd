@@ -125,18 +125,17 @@ groupingVariables = c('cell_line','agent', 'perturbation','replicate',
 'time'))
 # Overview of SummarizedExperiment output data
 output1
-# View GR metrics table
-assay(output1)
-# View details of each experiment
-colData(output1)
-# View descriptions of each GR metric (or goodness of fit measure)
 \dontrun{
-View(rowData(output1))
-}
+# View GR metrics table
+View(GRgetMetrics(output1))
+# View descriptions of each metric (or goodness of fit measure)
+View(GRgetDefs(output1))
 # View table of original data (converted to style of Case A) with GR values
-metadata(output1)[[1]]
+# and relative cell counts
+View(GRgetValues(output1))
 # View vector of grouping variables used for calculation
-metadata(output1)[[2]]
+GRgetGroupVars(output1)
+}
 # Load Case C (example 4) input
 # Same data, different format
 data("inputCaseC")
@@ -148,10 +147,10 @@ case = "C")
 # Extract data tables and export to .tsv or .csv
 \dontrun{
 # Write GR metrics parameter table to tab-separated text file
-write.table(assay(output1), file = "filename.tsv", quote = FALSE,
+write.table(GRgetMetrics(output1), file = "filename.tsv", quote = FALSE,
 sep = "\\t", row.names = FALSE)
 # Write original data plus GR values to comma-separated file
-write.table(metadata(output1)[[1]], file = "filename.csv", quote = FALSE,
+write.table(GRgetValues(output1), file = "filename.csv", quote = FALSE,
 sep = ",", row.names = FALSE)
 }
 }
