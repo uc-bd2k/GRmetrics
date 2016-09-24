@@ -3,7 +3,7 @@ title: "GRmetrics: an R package for calculation and visualization of
 Growth Rate Metrics"
 author: "Nicholas Clark"
 date: "`r doc_date()`"
-package: "`r pkg_ver('BiocStyle')`"
+package: "`r pkg_ver('GRmetrics')`"
 output: 
   BiocStyle::html_document
 css: custom.css
