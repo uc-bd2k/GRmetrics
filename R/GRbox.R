@@ -126,8 +126,13 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
       ggplot2::aes_string(colour = pointColor)) +
       ggplot2::xlab('') + ggplot2::ylab(metric)
     q = plotly::plotly_build(p)
+    # Last CRAN version of plotly (3.6.0) uses "q$"
+    # Latest github version of plotly (4.3.5) uses "q$x"
+    if(is.null(q$data)) {
+      # replace q with q$x so code works with new plotly version
+      q = q$x
+    }
     if(!is.null(wilA) & !is.null(wilB)) {
-      # Get y range:
       top_y = q[[2]]$yaxis$range[2]
       bottom_y = q[[2]]$yaxis$range[1]
       total_y_range = top_y - bottom_y
@@ -204,15 +209,31 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
         q = plotly::plotly_build(p)
       }
     }
-    bottom_margin = max(nchar(q$layout$xaxis$ticktext), na.rm = TRUE)
-    left = nchar(q$layout$xaxis$ticktext[1])
-    q$layout$xaxis$tickangle = -45
-    q$layout$margin$b = 15 + 6*bottom_margin
-    if(left > 10) {
-      left_margin = q$layout$margin$l + (left-10)*6
-      q$layout$margin$l = left_margin
+    q = plotly::plotly_build(p)
+    # Last CRAN version of plotly (3.6.0) uses "q$"
+    # Latest github version of plotly (4.3.5) uses "q$x"
+    if(!is.null(q$data)) { # old plotly
+      bottom_margin = max(nchar(q$layout$xaxis$ticktext), na.rm = TRUE)
+      left = nchar(q$layout$xaxis$ticktext[1])
+      q$layout$xaxis$tickangle = -45
+      q$layout$margin$b = 15 + 6*bottom_margin
+      if(left > 10) {
+        left_margin = q$layout$margin$l + (left-10)*6
+        q$layout$margin$l = left_margin
+      }
+      return(q)
+    } else { # new plotly
+      bottom_margin = max(nchar(q$x$layout$xaxis$ticktext), na.rm = TRUE)
+      left = nchar(q$x$layout$xaxis$ticktext[1])
+      q$x$layout$xaxis$tickangle = -45
+      q$x$layout$margin$b = 15 + 6*bottom_margin
+      if(left > 10) {
+        left_margin = q$x$layout$margin$l + (left-10)*6
+        q$x$layout$margin$l = left_margin
+      }
+      return(q)
     }
-    return(q)
+    
   } else {
     p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
                                                    y = metric))
@@ -226,6 +247,11 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
                                                          vjust = 1, hjust=1))
     if(!is.null(wilA) & !is.null(wilB)) {
       q = plotly::plotly_build(p)
+      # Last CRAN version of plotly (3.6.0) uses "q$"
+      # Latest github version of plotly (4.3.5) uses "q$x"
+      if(is.null(q$data)) {
+        q = q$x
+      }
       # Get y range:
       top_y = q[[2]]$yaxis$range[2]
       bottom_y = q[[2]]$yaxis$range[1]
