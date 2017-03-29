@@ -5,7 +5,7 @@ Version: 1.1.1
 Date: 2017-03-24
 Author: Nicholas Clark
 Maintainer: Nicholas Clark <nicholas.clark00@gmail.com>, Mario Medvedovic 
-<medvedm@ucmail.uc.edu>
+        <medvedm@ucmail.uc.edu>
 biocViews: CellBasedAssays, CellBiology, Software, TimeCourse,
         Visualization
 Description: Functions for calculating and visualizing growth-rate
