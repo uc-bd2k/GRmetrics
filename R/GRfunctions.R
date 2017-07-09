@@ -1,16 +1,26 @@
-.GRcalculate = function(inputData, groupingVariables, cap = FALSE, case = "A"){
+.GRcalculate = function(inputData, groupingVariables, cap = FALSE, case = "A",
+                        initial_count){
   # declaring values NULL to avoid note on package check
   cell_count = NULL
   cell_count__time0 = NULL
   cell_count__ctrl = NULL
-  log2nn = with(inputData, log2(cell_count/cell_count__time0))
-  log2nn_ctrl = with(inputData, log2(cell_count__ctrl/cell_count__time0))
-  GR = 2^(log2nn/log2nn_ctrl) - 1
+  duration = NULL
+  division_time = NULL
+  if(initial_count) {
+    log2nn = with(inputData, log2(cell_count/cell_count__time0))
+    log2nn_ctrl = with(inputData, log2(cell_count__ctrl/cell_count__time0))
+    GR = 2^(log2nn/log2nn_ctrl) - 1
+  } else {
+    log2_rel = with(inputData, log2(cell_count/cell_count__ctrl))
+    log2nn_ctrl = with(inputData, duration/division_time)
+    GR = 2^(1 + log2_rel/log2nn_ctrl) - 1
+  }
   rel_cell_count = with(inputData, cell_count/cell_count__ctrl)
   input_edited = inputData
   input_edited$log10_concentration = log10(input_edited$concentration)
   input_edited$GR = GR
   input_edited$rel_cell_count = rel_cell_count
+  input_edited$ctrl_cell_doublings = log2nn_ctrl
   tmp<-input_edited[,groupingVariables, drop = FALSE]
   experimentNew = (apply(tmp,1, function(x) (paste(x,collapse=" "))))
   if(cap == TRUE) {
@@ -28,7 +38,7 @@
 .GRlogisticFit = function(inputData, groupingVariables, force = FALSE,
                           cap = FALSE) {
   # declaring values NULL to avoid note on package check
-  experiment = NULL
+  #experiment = NULL
   # GR curve parameters
   GEC50 = NULL
   GRinf = NULL
@@ -68,6 +78,10 @@
   IC_mean = NULL
   AUC = NULL
   R_square_IC = NULL
+  
+  # other curve parameters
+  concentration_points = NULL
+  ctrl_cell_doublings = NULL
   for(i in 1:length(experiments)) {
     # print(i)
     data_exp = inputData[inputData$experiment == experiments[i], ]
@@ -82,6 +96,9 @@
     }
     GR_mean[i] = mean(data_exp$GR, na.rm = TRUE)
     IC_mean[i] = mean(data_exp$rel_cell_count, na.rm = TRUE)
+    concentration_points[i] = l
+    # calculate avg number of cell doublings in control and treated experiments
+    ctrl_cell_doublings[i] = mean(data_exp$ctrl_cell_doublings, na.rm = TRUE)
     #===== constrained fit GR curve ============
     c = unique(data_exp$concentration)
     priors = c(2, 0.1, stats::median(c))
@@ -150,15 +167,17 @@
       GRavg[j] = mean(data_trapz$GR, na.rm = TRUE)
       ICavg[j] = mean(data_trapz$rel_cell_count, na.rm = TRUE)
     }
+    diff_vector = diff(log10(concs), lag = 1)
+    conc_range = log10(concs[length(concs)]) - log10(concs[1])
     AOC[i] = sum((1 - (GRavg[1:(length(GRavg)-1)]+GRavg[2:length(GRavg)])/2)*
-                   diff(log10(concs), lag = 1), na.rm = TRUE)/
-      (log10(concs[length(concs)]) - log10(concs[1]))
+                   diff_vector, na.rm = TRUE)/conc_range
     AUC[i] = sum(((ICavg[1:(length(ICavg)-1)]+ICavg[2:length(ICavg)])/2)*
-                   diff(log10(concs), lag = 1), na.rm = TRUE)/
-      (log10(concs[length(concs)]) - log10(concs[1]))
+                   diff_vector, na.rm = TRUE)/conc_range
   }
 
   parameters = cbind(parameters, parameters2)
+  parameters$ctrl_cell_doublings = ctrl_cell_doublings
+  parameters$concentration_points = concentration_points
   # Calculate GR50 from parameters
   parameters$GR50 = with(parameters,GEC50*((1-GRinf)/(0.5-GRinf) - 1)^(1/h_GR))
   parameters$GRmax = GRmax
@@ -241,7 +260,8 @@
                              'r2_GR','pval_GR', 'fit_GR',
                              'flat_fit_GR', 'IC50', 'Emax', 'AUC', 'EC50',
                              'Einf', 'h', 'r2_IC', 'pval_IC', 'fit_IC',
-                             'flat_fit_IC','experiment')]
+                             'flat_fit_IC','experiment',
+                             'concentration_points', 'ctrl_cell_doublings')]
   if(!is.null(metadata)) {
     parameters = cbind(metadata, parameters)
   }
@@ -272,22 +292,68 @@
   return(mean(x))
 }
 
-.convert = function(inputData, case) {
+.check = function(inputData, case) {
+  message = NULL # an error message, if applicable
+  initial_count = TRUE # a logical for whether initial cell count is provided
+  input_cols = colnames(inputData)
+  caseA = c('concentration', 'cell_count', 'cell_count__ctrl',
+            'cell_count__time0')
+  caseA_div_time = c('concentration', 'cell_count','cell_count__ctrl',
+                     'duration','division_time')
   if(case == "A") {
-    if(length(intersect(colnames(inputData), c('concentration', 'cell_count',
-                                               'cell_count__ctrl',
-                                               'cell_count__time0'))) == 4) {
-      return(inputData)
-    } else {
-      stop("There must be columns named 'concentration', 'cell_count',
-            'cell_count__ctrl', and 'cell_count__time0' in inputData")
+    col_check = caseA %in% input_cols
+    col_check2 = caseA_div_time %in% input_cols
+    # check for correct input columns
+    if(sum(col_check) != 4 & sum(col_check2) != 5) {
+        message = "There must be columns named 'concentration', 'cell_count',
+          'cell_count__ctrl', and 'cell_count__time0' in inputData. If 
+           initial cell count (cell_count__time0) is not available, the assay 
+        duration and division time of cells can be used instead in columns 
+        labeled 'duration' and 'division_time'"
+        return(list(message, initial_count))
     }
-  } else if(case == "C") {
+    num_cols = intersect(input_cols, union(caseA, caseA_div_time))
+    num_cols_data = inputData[,num_cols]
+    num_cols_test = unlist(lapply(num_cols_data, is.numeric))
+    # check that columns are numeric
+    if(sum(!num_cols_test) > 0) {
+      non_numeric_cols = toString(names(which(!num_cols_test)))
+      message = paste("The following columns need to be numeric: ", non_numeric_cols)
+      return(list(message, initial_count))
+    }
+    cond1 = 'cell_count__time0' %in% colnames(inputData)
+    cond2 = length(intersect(colnames(inputData), 
+                   c('duration','division_time'))) == 2
+    if(cond1) {
+      initial_count = TRUE
+      if(cond2) {
+        warning("Initial cell count given, ignoring columns 'duration' and 
+                'division_time' for calculation of GR values.")
+      }
+    } else {
+      if(!cond2) {
+        message = "Need initial cell count or duration and division
+        time for control cells."
+      }
+      initial_count = FALSE
+    }
+  }
+  if(case == "C") {
+    # check for correct input columns
     if(length(intersect(colnames(inputData), c('concentration', 'cell_count',
                                                'time'))) != 3) {
-      stop("There must be columns named 'concentration', 'cell_count',
-           and 'time' in inputData")
+      message = "There must be columns named 'concentration', 'cell_count',
+           and 'time' in inputData"
+      return(list(message, initial_count))
     }
+  }
+  return(list(message, initial_count))
+}
+
+.convert = function(inputData, case) {
+  if(case == "A") {
+      return(inputData)
+  } else if(case == "C") {
     delete_cols = which(colnames(inputData) %in% c('concentration',
                                                    'cell_count'))
     keys = colnames(inputData)[-delete_cols]
@@ -496,17 +562,22 @@ GRfit = function(inputData, groupingVariables, case = "A",
   if('experiment' %in% colnames(inputData)) {
     stop("Change name of 'experiment' column.")
   }
+  input_check = .check(inputData, case)
+  message = input_check[[1]]
+  initial_count = input_check[[2]]
+  if(!is.null(message)) stop(message)
   inputData = .convert(inputData, case)
-  gr_table = .GRcalculate(inputData, groupingVariables, cap, case)
+  gr_table = .GRcalculate(inputData, groupingVariables, cap, case,
+                          initial_count)
   parameter_table = .GRlogisticFit(gr_table, groupingVariables, force, cap)
 
   colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_IC',
-                                'experiment')]
+                                'experiment', 'concentration_points')]
   rownames(colData) = colData$experiment
   colData = S4Vectors::DataFrame(colData)
   
-  Metric = c('GR50','GRmax','GR_AOC','GEC50','GRinf','h_GR',
-              'r2_GR','pval_GR','flat_fit_GR', 
+  Metric = c('ctrl_cell_doublings','GR50','GRmax','GR_AOC','GEC50','GRinf',
+             'h_GR','r2_GR','pval_GR','flat_fit_GR', 
               'IC50', 'Emax', 'AUC', 'EC50','Einf', 'h', 
               'r2_IC', 'pval_IC', 'flat_fit_IC')
   assays = parameter_table[ , Metric]
@@ -514,6 +585,7 @@ GRfit = function(inputData, groupingVariables, case = "A",
   assays = t(assays)
 
   Description = c(
+    "The number of cell doublings in the control population during the assay",
     "The concentration at which GR(c) = 0.5",
     "The maximal effect of the drug (minimal GR value)",
     "The 'Area Over the Curve' - The area between the line GR = 1 and the curve, similar to traditional AUC",
