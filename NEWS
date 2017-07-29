@@ -1,3 +1,9 @@
+CHANGES IN VERSION 1.3.3
+-------------------------
+
+- Renamed column "GR" to "GRvalue" for GR value table to match other code.
+- Fixed erroneous error message in division rate GR value calculation
+
 CHANGES IN VERSION 1.3.2
 -------------------------
 

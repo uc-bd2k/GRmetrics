@@ -18,13 +18,13 @@
   rel_cell_count = with(inputData, cell_count/cell_count__ctrl)
   input_edited = inputData
   input_edited$log10_concentration = log10(input_edited$concentration)
-  input_edited$GR = GR
+  input_edited$GRvalue = GR
   input_edited$rel_cell_count = rel_cell_count
   input_edited$ctrl_cell_doublings = log2nn_ctrl
   tmp<-input_edited[,groupingVariables, drop = FALSE]
   experimentNew = (apply(tmp,1, function(x) (paste(x,collapse=" "))))
   if(cap == TRUE) {
-    input_edited$GR[input_edited$GR > 1] = 1
+    input_edited$GRvalue[input_edited$GRvalue > 1] = 1
     input_edited$rel_cell_count[input_edited$rel_cell_count > 1] = 1
   }
   if(length(groupingVariables) > 0) {
@@ -89,7 +89,7 @@
     if(!is.null(metadata)) {
       metadata[i,] = data_exp[1,groupingVariables, drop = FALSE]
     }
-    GR_mean[i] = mean(data_exp$GR, na.rm = TRUE)
+    GR_mean[i] = mean(data_exp$GRvalue, na.rm = TRUE)
     rel_cell_mean[i] = mean(data_exp$rel_cell_count, na.rm = TRUE)
     # calculate avg number of cell doublings in control and treated experiments
     ctrl_cell_doublings[i] = mean(data_exp$ctrl_cell_doublings, na.rm = TRUE)
@@ -110,7 +110,7 @@
       controls$rmNA = TRUE
       # GR curve fitting
       output_model_new = try(drc::drm(
-        GR~log10_concentration, experiment, data=data_exp, logDose = 10,
+        GRvalue~log10_concentration, experiment, data=data_exp, logDose = 10,
         fct=drc::LL.3u(names=c('h_GR','GRinf','GEC50')), start = priors,
         lowerl = lower, upperl = upper, control = controls,
         na.action = na.omit))
@@ -120,10 +120,10 @@
         Npara = 3 # N of parameters in the growth curve
         Npara_flat = 1 # F-test for the models
         RSS2 = sum(stats::residuals(output_model_new)^2, na.rm = TRUE)
-        RSS1 = sum((data_exp$GR - mean(data_exp$GR, na.rm = TRUE))^2,
+        RSS1 = sum((data_exp$GRvalue - mean(data_exp$GRvalue, na.rm = TRUE))^2,
                    na.rm = TRUE)
         df1 = (Npara - Npara_flat)
-        df2 = (length(na.omit(data_exp$GR)) - Npara + 1)
+        df2 = (length(na.omit(data_exp$GRvalue)) - Npara + 1)
         f_value = ((RSS1-RSS2)/df1)/(RSS2/df2)
         f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
         pval_GR[i] = f_pval
@@ -163,7 +163,7 @@
     
     for(j in 1:l) {
       data_trapz = data_exp[data_exp$concentration == concs[j],]
-      GRavg[j] = mean(data_trapz$GR, na.rm = TRUE)
+      GRavg[j] = mean(data_trapz$GRvalue, na.rm = TRUE)
       rel_cell_avg[j] = mean(data_trapz$rel_cell_count, na.rm = TRUE)
     }
     
@@ -373,9 +373,7 @@
     delete_cols = which(colnames(inputData) %in% c('concentration',
                                                    'cell_count'))
     keys = colnames(inputData)[-delete_cols]
-    if(initial_count) {
-      time0 = inputData[inputData$time == 0, c(keys, 'cell_count')]
-    }
+    time0 = inputData[inputData$time == 0, c(keys, 'cell_count')]
     ctrl = inputData[inputData$concentration == 0 & inputData$time > 0,
                      c(keys, 'cell_count')]
     data = inputData[inputData$concentration != 0 & inputData$time > 0, ]

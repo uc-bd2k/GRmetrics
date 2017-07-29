@@ -67,8 +67,8 @@ GRgetValues <- function(fitData) {
 #' @export
 
 GRgetMetrics <- function(fitData) {
-  return(cbind(as.data.frame(colData(fitData)), 
-               as.data.frame(t(assay(fitData)))))
+  return(cbind(as.data.frame(SummarizedExperiment::colData(fitData)), 
+               as.data.frame(t(SummarizedExperiment::assay(fitData)))))
 }
 
 #' Grouping Variables
@@ -141,5 +141,5 @@ GRgetGroupVars <- function(fitData) {
 #' @export
 
 GRgetDefs <- function(fitData) {
-  return(rowData(fitData))
+  return(SummarizedExperiment::rowData(fitData))
 }

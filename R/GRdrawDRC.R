@@ -34,8 +34,8 @@
 #'
 #' By default, curves and points are plotted for all experiments. To specify
 #' a smaller set of experiments, use the "experiments" parameter. To see the
-#' names of individual experiments, use
-#' \code{GRfitObject$parameter_table$experiment}. See the examples below.
+#' names of individual experiments for a GRfit object \code{fit_example}, see
+#' \code{colData(fit_example)}. See the examples below.
 #' @seealso To create the object needed for this function, see
 #' \code{\link{GRfit}}. For other visualizations, see \code{\link{GRbox}} and
 #' \code{\link{GRscatter}}. For online GR calculator and browser, see
@@ -135,7 +135,7 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
   if(metric == "GR") {
     if(points == TRUE & curves == FALSE) {
       p = ggplot2::ggplot(data = data, ggplot2::aes(x = log10_concentration,
-                          y = GR, colour = experiment)) + ggplot2::geom_point()
+                          y = GRvalue, colour = experiment)) + ggplot2::geom_point()
     } else if(points == FALSE & curves == TRUE) {
       p = ggplot2::ggplot(data = curve_data_all,
                           ggplot2::aes(x = log10(Concentration),
@@ -144,7 +144,7 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
       p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
         ggplot2::aes(x = log10(Concentration), y = GR,colour = experiment)) +
         ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
-                                              y = GR, colour = experiment))
+                                              y = GRvalue, colour = experiment))
     }
     p = p + ggplot2::coord_cartesian(xlim = c(log10(min_conc)-0.1,
                                               log10(max_conc)+0.1),
