@@ -43,4 +43,3 @@ that your input data frame include these exact column names or the same
 number of columns.
 }
 \keyword{datasets}
-

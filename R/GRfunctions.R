@@ -12,7 +12,7 @@
     GR = 2^(log2nn/log2nn_ctrl) - 1
   } else {
     log2_rel = with(inputData, log2(cell_count/cell_count__ctrl))
-    log2nn_ctrl = with(inputData, duration/division_time)
+    log2nn_ctrl = with(inputData, treatment_duration/division_time)
     GR = 2^(1 + log2_rel/log2nn_ctrl) - 1
   }
   rel_cell_count = with(inputData, cell_count/cell_count__ctrl)
@@ -43,7 +43,7 @@
   GEC50 = NULL
   GRinf = NULL
   h_GR = NULL
-  # IC curve parameters
+  # Relative cell count curve parameters
   EC50 = NULL
   Einf = NULL
   h = NULL
@@ -72,12 +72,12 @@
   AOC = NULL
   R_square_GR = NULL
   
-  # More IC curve parameters
-  pval_IC = NULL
+  # More Relative cell count curve parameters
+  pval_rel_cell = NULL
   Emax = NULL
-  IC_mean = NULL
+  rel_cell_mean = NULL
   AUC = NULL
-  R_square_IC = NULL
+  R_square_rel_cell = NULL
   
   # other curve parameters
   concentration_points = NULL
@@ -85,18 +85,12 @@
   for(i in 1:length(experiments)) {
     # print(i)
     data_exp = inputData[inputData$experiment == experiments[i], ]
-    concs = sort(unique(data_exp$concentration))
-    l = length(concs)
-    max_concs = data_exp[data_exp$concentration %in% concs[c(l,l-1)],]
-    GRmax[i] = min(max_concs$GR, na.rm = TRUE)
-    Emax[i] = min(max_concs$rel_cell_count, na.rm = TRUE)
-    #     metadata[i,] = data_exp[1,1:5]
+    
     if(!is.null(metadata)) {
       metadata[i,] = data_exp[1,groupingVariables, drop = FALSE]
     }
     GR_mean[i] = mean(data_exp$GR, na.rm = TRUE)
-    IC_mean[i] = mean(data_exp$rel_cell_count, na.rm = TRUE)
-    concentration_points[i] = l
+    rel_cell_mean[i] = mean(data_exp$rel_cell_count, na.rm = TRUE)
     # calculate avg number of cell doublings in control and treated experiments
     ctrl_cell_doublings[i] = mean(data_exp$ctrl_cell_doublings, na.rm = TRUE)
     #===== constrained fit GR curve ============
@@ -104,10 +98,10 @@
     priors = c(2, 0.1, stats::median(c))
     lower = c(.1, -1, min(c)*1e-2)
     upper = c(5, 1, max(c)*1e2)
-    #===== constrained fit IC curve ============
-    priors_IC = c(2, 0.1, stats::median(c))
-    lower_IC = c(.1, 0, min(c)*1e-2)
-    upper_IC = c(5, 1, max(c)*1e2)
+    #===== constrained fit Relative cell count curve ============
+    priors_rel_cell = c(2, 0.1, stats::median(c))
+    lower_rel_cell = c(.1, 0, min(c)*1e-2)
+    upper_rel_cell = c(5, 1, max(c)*1e2)
     if(dim(data_exp)[1] > 1) {
       controls = drc::drmc()
       controls$relTol = 1e-06
@@ -116,7 +110,7 @@
       controls$rmNA = TRUE
       # GR curve fitting
       output_model_new = try(drc::drm(
-        GR~concentration, experiment, data=data_exp,
+        GR~log10_concentration, experiment, data=data_exp, logDose = 10,
         fct=drc::LL.3u(names=c('h_GR','GRinf','GEC50')), start = priors,
         lowerl = lower, upperl = upper, control = controls,
         na.action = na.omit))
@@ -135,43 +129,52 @@
         pval_GR[i] = f_pval
         R_square_GR[i] = 1 - RSS2/RSS1
       }
-      # IC curve fitting
-      output_model_new_IC = try(drc::drm(
-        rel_cell_count~concentration, experiment, data=data_exp,
-        fct=drc::LL.3u(names=c('h','Einf','EC50')), start = priors_IC,
-        lowerl = lower_IC, upperl = upper_IC, control = controls,
+      # Relative cell count curve fitting
+      output_model_new_rel_cell = try(drc::drm(
+        rel_cell_count~log10_concentration, experiment, data=data_exp, logDose = 10,
+        fct=drc::LL.3u(names=c('h','Einf','EC50')), start = priors_rel_cell,
+        lowerl = lower_rel_cell, upperl = upper_rel_cell, control = controls,
         na.action = na.omit))
-      if(class(output_model_new_IC)!="try-error") {
-        parameters2[i,] = c(as.numeric(stats::coef(output_model_new_IC)))
+      if(class(output_model_new_rel_cell)!="try-error") {
+        parameters2[i,] = c(as.numeric(stats::coef(output_model_new_rel_cell)))
         # F-test for the significance of the sigmoidal fit
         Npara = 3 # N of parameters in the growth curve
         Npara_flat = 1 # F-test for the models
-        RSS2 = sum(stats::residuals(output_model_new_IC)^2, na.rm = TRUE)
+        RSS2 = sum(stats::residuals(output_model_new_rel_cell)^2, na.rm = TRUE)
         RSS1 = sum((data_exp$rel_cell_count - mean(data_exp$rel_cell_count,
                    na.rm = TRUE))^2, na.rm = TRUE)
         df1 = (Npara - Npara_flat)
         df2 = (length(na.omit(data_exp$rel_cell_count)) - Npara + 1)
         f_value = ((RSS1-RSS2)/df1)/(RSS2/df2)
         f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
-        pval_IC[i] = f_pval
-        R_square_IC[i] = 1 - RSS2/RSS1
+        pval_rel_cell[i] = f_pval
+        R_square_rel_cell[i] = 1 - RSS2/RSS1
       }
     }
     #==================================
 
     # Trapezoid rule for integration of GR_AOC
     GRavg = NULL
-    ICavg = NULL
-    for(j in 1:length(concs)) {
+    rel_cell_avg = NULL
+    
+    concs = sort(unique(data_exp$concentration))
+    l = length(concs)
+    concentration_points[i] = l
+    
+    for(j in 1:l) {
       data_trapz = data_exp[data_exp$concentration == concs[j],]
       GRavg[j] = mean(data_trapz$GR, na.rm = TRUE)
-      ICavg[j] = mean(data_trapz$rel_cell_count, na.rm = TRUE)
+      rel_cell_avg[j] = mean(data_trapz$rel_cell_count, na.rm = TRUE)
     }
+    
+    GRmax[i] = min(GRavg[c(l,l-1)], na.rm = TRUE)
+    Emax[i] = min(rel_cell_avg[c(l,l-1)], na.rm = TRUE)
+    
     diff_vector = diff(log10(concs), lag = 1)
     conc_range = log10(concs[length(concs)]) - log10(concs[1])
     AOC[i] = sum((1 - (GRavg[1:(length(GRavg)-1)]+GRavg[2:length(GRavg)])/2)*
                    diff_vector, na.rm = TRUE)/conc_range
-    AUC[i] = sum(((ICavg[1:(length(ICavg)-1)]+ICavg[2:length(ICavg)])/2)*
+    AUC[i] = sum(((rel_cell_avg[1:(length(rel_cell_avg)-1)]+rel_cell_avg[2:length(rel_cell_avg)])/2)*
                    diff_vector, na.rm = TRUE)/conc_range
   }
 
@@ -187,12 +190,12 @@
   parameters$IC50 = with(parameters,EC50*((1-Einf)/(0.5-Einf) - 1)^(1/h))
   parameters$Emax = Emax
   parameters$AUC = AUC
-  parameters$r2_IC = R_square_IC
+  parameters$r2_rel_cell = R_square_rel_cell
   
   if(is.null(pval_GR)) {pval_GR = NA}
-  if(is.null(pval_IC)) {pval_IC = NA}
+  if(is.null(pval_rel_cell)) {pval_rel_cell = NA}
   parameters$pval_GR = pval_GR
-  parameters$pval_IC = pval_IC
+  parameters$pval_rel_cell = pval_rel_cell
   # Re-order rows to match reference_output
   parameters$experiment = experiments
   # Threshold for F-test pval_GR
@@ -206,37 +209,35 @@
       parameters$fit_GR[i] = ifelse(is.na(parameters$GEC50[i]), "flat",
                                     "sigmoid")
     }
-    # Flat or sigmoid fit for IC curve
-    if(!is.na(parameters$pval_IC[i])) {
-      parameters$fit_IC[i] = ifelse(parameters$pval_IC[i] >= pcutoff |
+    # Flat or sigmoid fit for relative cell count curve
+    if(!is.na(parameters$pval_rel_cell[i])) {
+      parameters$fit_rel_cell[i] = ifelse(parameters$pval_rel_cell[i] >= pcutoff |
                                       is.na(parameters$EC50[i]), "flat",
                                     "sigmoid")
     } else {
-      parameters$fit_IC[i] = ifelse(is.na(parameters$EC50[i]), "flat",
+      parameters$fit_rel_cell[i] = ifelse(is.na(parameters$EC50[i]), "flat",
                                     "sigmoid")
     }
   }
   # changed to above code to deal with NAs
-  #parameters$fit_GR = with(parameters, ifelse(pval_GR >= pcutoff | is.na(GEC50),
-  #"flat","sigmoid"))
   # Add values for flat fits: GEC50 = 0, h_GR = 0.01 and GR50 = +/- Inf
   
   parameters$flat_fit_GR = GR_mean
-  parameters$flat_fit_IC = IC_mean
+  parameters$flat_fit_rel_cell = rel_cell_mean
   for(i in 1:dim(parameters)[1]) {
     if(parameters$fit_GR[i] == "flat") {
       parameters$GEC50[i] = 0
       parameters$h_GR[i] = 0.01
       parameters$GR50[i] = ifelse(parameters$flat_fit_GR[i] > .5, Inf, -Inf)
-      parameters$GRinf[i] = parameters$flat_fit_GR[i]
+      parameters$GRinf[i] = parameters$GRmax[i]
     }
   }
   for(i in 1:dim(parameters)[1]) {
-    if(parameters$fit_IC[i] == "flat") {
+    if(parameters$fit_rel_cell[i] == "flat") {
       parameters$EC50[i] = 0
       parameters$h[i] = 0.01
-      parameters$IC50[i] = ifelse(parameters$flat_fit_IC[i] > .5, Inf, -Inf)
-      parameters$Einf[i] = parameters$flat_fit_IC[i]
+      parameters$IC50[i] = ifelse(parameters$flat_fit_rel_cell[i] > .5, Inf, -Inf)
+      parameters$Einf[i] = parameters$Emax[i]
     }
   }
   # Add GR50 = +/-Inf for any curves that don't reach GR = 0.5
@@ -245,22 +246,22 @@
       parameters$GR50[i] = ifelse(parameters$flat_fit_GR[i] > .5, Inf, -Inf)
     }
     if(is.na(parameters$IC50[i])) {
-      parameters$IC50[i] = ifelse(parameters$flat_fit_IC[i] > .5, Inf, -Inf)
+      parameters$IC50[i] = ifelse(parameters$flat_fit_rel_cell[i] > .5, Inf, -Inf)
     }
   }
   for(i in 1:dim(parameters)[1]) {
     if(parameters$fit_GR[i] == "sigmoid") {
       parameters$flat_fit_GR[i] = NA
     }
-    if(parameters$fit_IC[i] == "sigmoid") {
-      parameters$flat_fit_IC[i] = NA
+    if(parameters$fit_rel_cell[i] == "sigmoid") {
+      parameters$flat_fit_rel_cell[i] = NA
     }
   }
   parameters = parameters[,c('GR50','GRmax','GR_AOC','GEC50','GRinf','h_GR',
                              'r2_GR','pval_GR', 'fit_GR',
                              'flat_fit_GR', 'IC50', 'Emax', 'AUC', 'EC50',
-                             'Einf', 'h', 'r2_IC', 'pval_IC', 'fit_IC',
-                             'flat_fit_IC','experiment',
+                             'Einf', 'h', 'r2_rel_cell', 'pval_rel_cell', 'fit_rel_cell',
+                             'flat_fit_rel_cell','experiment',
                              'concentration_points', 'ctrl_cell_doublings')]
   if(!is.null(metadata)) {
     parameters = cbind(metadata, parameters)
@@ -272,7 +273,7 @@
   GRinf + (1 - GRinf)/(1 + (c/GEC50)^h_GR)
 }
 
-.IClogistic_3u = function(c, Einf, EC50, h){
+.rel_cell_logistic_3u = function(c, Einf, EC50, h){
   Einf + (1 - Einf)/(1 + (c/EC50)^h)
 }
 
@@ -299,7 +300,7 @@
   caseA = c('concentration', 'cell_count', 'cell_count__ctrl',
             'cell_count__time0')
   caseA_div_time = c('concentration', 'cell_count','cell_count__ctrl',
-                     'duration','division_time')
+                     'treatment_duration','division_time')
   if(case == "A") {
     col_check = caseA %in% input_cols
     col_check2 = caseA_div_time %in% input_cols
@@ -309,7 +310,7 @@
           'cell_count__ctrl', and 'cell_count__time0' in inputData. If 
            initial cell count (cell_count__time0) is not available, the assay 
         duration and division time of cells can be used instead in columns 
-        labeled 'duration' and 'division_time'"
+        labeled 'treatment_duration' and 'division_time'"
         return(list(message, initial_count))
     }
     num_cols = intersect(input_cols, union(caseA, caseA_div_time))
@@ -323,16 +324,16 @@
     }
     cond1 = 'cell_count__time0' %in% colnames(inputData)
     cond2 = length(intersect(colnames(inputData), 
-                   c('duration','division_time'))) == 2
+                   c('treatment_duration','division_time'))) == 2
     if(cond1) {
       initial_count = TRUE
       if(cond2) {
-        warning("Initial cell count given, ignoring columns 'duration' and 
+        warning("Initial cell count given, ignoring columns 'treatment_duration' and 
                 'division_time' for calculation of GR values.")
       }
     } else {
       if(!cond2) {
-        message = "Need initial cell count or duration and division
+        message = "Need initial cell count or treatment_duration and division
         time for control cells."
       }
       initial_count = FALSE
@@ -344,20 +345,37 @@
                                                'time'))) != 3) {
       message = "There must be columns named 'concentration', 'cell_count',
            and 'time' in inputData"
-      return(list(message, initial_count))
+    } else {
+      # check for time 0 cell counts
+      if(sum(inputData$time == 0) == 0) {
+        initial_count = FALSE
+        if(length(intersect(colnames(inputData), c('treatment_duration',
+                                                   'division_time'))) != 2) {
+          message = "Need initial cell count or treatment_duration and division 
+          time for control cells."
+        }
+      } else {
+        if(length(intersect(colnames(inputData), c('treatment_duration',
+                                                   'division_time'))) == 2) {
+          message = "You have provided both time 0 cell counts and division 
+          times. Please provide one or the other."
+        }
+      }
     }
   }
   return(list(message, initial_count))
 }
 
-.convert = function(inputData, case) {
+.convert = function(inputData, case, initial_count) {
   if(case == "A") {
       return(inputData)
   } else if(case == "C") {
     delete_cols = which(colnames(inputData) %in% c('concentration',
                                                    'cell_count'))
     keys = colnames(inputData)[-delete_cols]
-    time0 = inputData[inputData$time == 0, c(keys, 'cell_count')]
+    if(initial_count) {
+      time0 = inputData[inputData$time == 0, c(keys, 'cell_count')]
+    }
     ctrl = inputData[inputData$concentration == 0 & inputData$time > 0,
                      c(keys, 'cell_count')]
     data = inputData[inputData$concentration != 0 & inputData$time > 0, ]
@@ -365,11 +383,12 @@
     ctrl_keys = NULL
     for(i in 1:length(keys)) {
       time0_keys[i] = length(intersect(time0[[ keys[i] ]],
-                                       data[[ keys[i] ]])) > 0
+                                         data[[ keys[i] ]])) > 0
       ctrl_keys[i] = length(intersect(ctrl[[ keys[i] ]],
                                       data[[ keys[i] ]])) > 0
     }
     ctrl_keys = keys[ctrl_keys]
+    
     time0_keys = keys[time0_keys]
 
     temp = ctrl[, ctrl_keys]
@@ -399,6 +418,8 @@
     delete_cols = which(colnames(data) %in% c('key_ctrl', 'key_time0'))
     data = data[, -delete_cols]
 
+    if(!initial_count) { data$cell_count__time0 = NULL }
+    data = as.data.frame(data)
     row.names(data) = 1:dim(data)[1]
     inputData = data
     return(inputData)
@@ -440,7 +461,7 @@
 #' @details
 #' Calculation of GR values is performed by the function \code{.GRcalculate}
 #' according to the "Online Methods" section of Hafner and Niepel et al.
-#' (\url{http://dx.doi.org/10.1038/nmeth.3853}).
+#' (2016, \url{http://dx.doi.org/10.1038/nmeth.3853}).
 #'
 #' The fitting of the logistic curve is performed by the \code{.GRlogisticFit}
 #' function, which calls the \code{drm} function from the \code{drc} package
@@ -501,9 +522,34 @@
 #'
 #' All other columns will be treated as additional keys on which the data
 #' will be grouped (e.g. cell_line, drug, replicate)
+#' 
+#' GR values and dose-response curves/metrics can also be computed using
+#' division times for (untreated) cell lines in the place of time zero cell
+#' counts, using the first formula in the Supplement of Hafner et al. (2017,
+#' \url{http://dx.doi.org/10.1038/nbt.3882}).
+#' 
+#' To use division rate instead of initial cell count,
+#' inputData should not have any initial cell counts (i.e. For Case "A", no 
+#' "cell_count__time0" column. For Case "C", no values of 0 in the "time" 
+#' column) and should instead have two columns "treatment_duration" and 
+#' "division_time".
+#' 
+#' In the first column, "treatment duration", one should have the duration of 
+#' the assay between time of treatment and the final cell counts (e.g. 72 for 
+#' hours in a typical 3-day assay). In the second column, "division_time", one 
+#' should have the time it takes for one cell doubling to occur in each
+#' (untreated) cell line used under the conditions of the experiment. These 
+#' two columns must contain numbers (no units), but need to refer to the same
+#' units (e.g. hours). In most cases, all experiments of a particular cell 
+#' line would have the same "division_time", however if the division rate of 
+#' untreated cells varied on another parameter, for example seeding density,
+#' it would be appropriate to measure and input division times based on 
+#' cell line/seeding density pairs.
+#' 
+#' 
 #' @note
 #' To see the underlying code, use (\code{getAnywhere(.GRlogistic_3u)}), 
-#' (\code{getAnywhere(.IClogistic_3u)}),
+#' (\code{getAnywhere(.rel_cell_logistic_3u)}),
 #' (\code{getAnywhere(.GRcalculate)}), and (\code{getAnywhere(.GRlogisticFit)})
 #' @seealso See \code{\link{drm}} for the general logistic fit function that
 #' solves for the parameters GRinf, GEC50, and h_GR. See
@@ -512,10 +558,14 @@
 #' \code{\link{GRbox}}, and \code{\link{GRscatter}} to create visualizations
 #' using the output from this function. For online GR calculator and browser,
 #' see \url{http://www.grcalculator.org}.
-#' @references Hafner, M., Niepel, M. Chung, M. and Sorger, P.K.,
+#' @references Hafner, M., Niepel, M., Chung, M., and Sorger, P.K.,
 #' "Growth Rate Inhibition Metrics Correct For Confounders In Measuring
 #' Sensitivity To Cancer Drugs". \emph{Nature Methods} 13.6 (2016): 521-527.
 #' \url{http://dx.doi.org/10.1038/nmeth.3853}
+#' @references Hafner, M., Niepel, M., Sorger, P.K.,
+#' "Alternative drug sensitivity metrics improve preclinical cancer
+#' pharmacogenomics". \emph{Nature Biotechnology} 35.6 (2017): 500-502.
+#' \url{http://dx.doi.org/10.1038/nbt.3882}
 #'
 #' @examples
 #' # Load Case A (example 1) input
@@ -566,12 +616,12 @@ GRfit = function(inputData, groupingVariables, case = "A",
   message = input_check[[1]]
   initial_count = input_check[[2]]
   if(!is.null(message)) stop(message)
-  inputData = .convert(inputData, case)
+  inputData = .convert(inputData, case, initial_count)
   gr_table = .GRcalculate(inputData, groupingVariables, cap, case,
                           initial_count)
   parameter_table = .GRlogisticFit(gr_table, groupingVariables, force, cap)
 
-  colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_IC',
+  colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_rel_cell',
                                 'experiment', 'concentration_points')]
   rownames(colData) = colData$experiment
   colData = S4Vectors::DataFrame(colData)
@@ -579,7 +629,7 @@ GRfit = function(inputData, groupingVariables, case = "A",
   Metric = c('ctrl_cell_doublings','GR50','GRmax','GR_AOC','GEC50','GRinf',
              'h_GR','r2_GR','pval_GR','flat_fit_GR', 
               'IC50', 'Emax', 'AUC', 'EC50','Einf', 'h', 
-              'r2_IC', 'pval_IC', 'flat_fit_IC')
+              'r2_rel_cell', 'pval_rel_cell', 'flat_fit_rel_cell')
   assays = parameter_table[ , Metric]
   rownames(assays) = parameter_table$experiment
   assays = t(assays)

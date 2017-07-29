@@ -59,13 +59,12 @@ GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB')
 GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB',
 plotly = FALSE)
 }
-\author{
-Nicholas Clark
-}
 \seealso{
 To create the object needed for this function, see
 \code{\link{GRfit}}. For other visualizations, see \code{\link{GRdrawDRC}}
 and \code{\link{GRbox}}. For online GR calculator and browser, see
 \url{http://www.grcalculator.org}.
 }
-
+\author{
+Nicholas Clark
+}

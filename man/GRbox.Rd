@@ -79,13 +79,12 @@ factors = c('BT20', 'MCF10A'), plotly = FALSE)
 GRbox(output1, metric = 'GR50', groupVariable = 'cell_line',
 pointColor = 'cell_line', wilA = "BT20", wilB = c("MCF7","MCF10A"))
 }
-\author{
-Nicholas Clark
-}
 \seealso{
 To create the object needed for this function, see
 \code{\link{GRfit}}. For other visualizations, see \code{\link{GRdrawDRC}}
 and \code{\link{GRscatter}}. For online GR calculator and browser, see
 \url{http://www.grcalculator.org}.
 }
-
+\author{
+Nicholas Clark
+}

@@ -40,11 +40,10 @@ head(defs)
 # Look at a specific definition
 defs[15,]
 }
-\author{
-Nicholas Clark
-}
 \seealso{
 To create the object needed for this function, see
 \code{\link{GRfit}}.
 }
-
+\author{
+Nicholas Clark
+}

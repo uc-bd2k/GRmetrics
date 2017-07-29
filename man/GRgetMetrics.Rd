@@ -37,11 +37,10 @@ metrics = GRgetMetrics(output1)
 \dontrun{View(metrics)}
 head(metrics)
 }
-\author{
-Nicholas Clark
-}
 \seealso{
 To create the object needed for this function, see
 \code{\link{GRfit}}.
 }
-
+\author{
+Nicholas Clark
+}

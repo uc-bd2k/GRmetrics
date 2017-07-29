@@ -1,12 +1,12 @@
 ---
 title: "GRmetrics: an R package for calculation and visualization of 
-Growth Rate Metrics"
+dose-response metrics based on growth rate inhibition"
 author: "Nicholas Clark"
 date: "`r doc_date()`"
 output: 
   BiocStyle::html_document
 vignette: >
-  %\VignetteIndexEntry{GRmetrics: an R package for calculation and visualization of Growth Rate Metrics}
+  %\VignetteIndexEntry{GRmetrics: an R package for calculation and visualization of dose-response metrics based on growth rate inhibition}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -70,7 +70,7 @@ Browser interface and online tools: http://www.grcalculator.org
 
 Much of the description below has been adapted from:
 
-https://github.com/sorgerlab/gr50_tools/blob/master/README.md.
+https://github.com/datarail/gr_metrics/blob/master/README.md.
 
 #Input data
 The main function of the package is **GRfit**, which takes in a data frame 
@@ -348,7 +348,8 @@ based on interpolation of the fitted curve.
 
 - **GRmax**, the effect at the highest tested concentration. Note that 
 *GRmax* can differ from *GRinf* if the dose-response does not reach its 
-plateau value.
+plateau value. For robustness, we take this as the minimum mean GR value at 
+the two highest concentrations.
 
 - **GR_AOC**, the area over the dose-response curve, which is the integral of 
 *1-GR(c)* over the range of concentrations tested, normalized by the range of 
@@ -361,17 +362,19 @@ potency of the drug.
 
 - **h_GR**, The Hill coefficient of the fitted (GR) curve, which reflects how steep the dose response curve is
 
-- **r2_GR**,	The coefficient of determination - essentially how well the (GR) curve fits to the data points
+- **r2_GR**, The coefficient of determination - essentially how well the (GR) curve fits to the data points
 
-- **pval_GR**,	The p-value of the F-test comparing the fit of the (GR) curve to a horizontal line fit
+- **pval_GR**, The p-value of the F-test comparing the fit of the (GR) curve to a horizontal line fit
 
-- **flat_fit_GR**,	For data that doesn't significantly fit better to a curve than a horizontal line fit (p > 0.05), the y value (GR) of the flat line
+- **flat_fit_GR**, For data that doesn't significantly fit better to a curve than a horizontal line fit (p > 0.05), the y value (GR) of the flat line
 
 The following traditional metrics are calculated:
 
-- **IC50**,	The concentration at which relative cell count = 0.5
+- **IC50**, The concentration at which relative cell count = 0.5
 
-- **Emax**,	The maximal effect of the drug (minimal relative cell count value)
+- **Emax**, The maximal effect of the drug (minimal relative cell count value). 
+For robustness, we take this as the minimum mean relative cell count at the 
+two highest concentrations.
 
 - **AUC**, The 'Area Under the Curve' - The area below the fitted (traditional) dose response curve
 
@@ -381,11 +384,11 @@ The following traditional metrics are calculated:
 
 - **h**, The Hill coefficient of the fitted (traditional) dose response curve, which - reflects how steep the dose response curve is
 
-- **r2_IC**, The coefficient of determination - essentially how well the (traditional) curve fits to the data points
+- **r2_rel_cell**, The coefficient of determination - essentially how well the (traditional) curve fits to the data points
 
-- **pval_IC**, The p-value of the F-test comparing the fit of the (traditional) curve to a horizontal line fit
+- **pval_rel_cell**, The p-value of the F-test comparing the fit of the (traditional) curve to a horizontal line fit
 
-- **flat_fit_IC**, For data that doesn't significantly fit better to a curve than a horizontal line fit (p > 0.05), the y value (relative cell count) of the flat line
+- **flat_fit_rel_cell**, For data that doesn't significantly fit better to a curve than a horizontal line fit (p > 0.05), the y value (relative cell count) of the flat line
 
 In addition to the metrics, the scripts report the r-squared of the fit and
 evaluate the significance of the sigmoidal fit based on an F-test. If the fit 

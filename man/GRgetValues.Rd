@@ -36,11 +36,10 @@ GRvalues = GRgetValues(output1)
 head(GRvalues)
 \dontrun{View(GRvalues)}
 }
-\author{
-Nicholas Clark
-}
 \seealso{
 To create the object needed for this function, see
 \code{\link{GRfit}}.
 }
-
+\author{
+Nicholas Clark
+}

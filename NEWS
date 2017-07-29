@@ -1,5 +1,30 @@
-# Version 1.1.1
+CHANGES IN VERSION 1.3.2
+-------------------------
 
-- Added NEWS file
-- Added CITATION file
-- Added Mario Medvedovic <medvedm@ucmail.uc.edu> as maintainer
+- Renamed some curve parameters for the relative cell count curve
+  - changed "IC" to "rel_cell".
+- Changed GRdrawDRC function parameter option for dose response curves based 
+  on relative cell counts from 'metric = "IC"' to 'metric = "rel_cell"'.
+- Changed GRinf (and Einf) value to the minimum of the mean GR values
+  (relative cell count) at the two highest concentrations tested for the 
+  case of horizontal line fits (same as GRmax).
+- Changed GRmax (and Emax) so that in the case of averaging over multiple 
+  conditions, the value taken is the minimum of the mean of GR values
+  (relative cell count) at the two highest concentrations instead of the 
+  absolute minimum GR value at these concentrations.
+- "duration" column in input changed to "treatment_duration" to match the 
+  nomenclature in other code.
+- Added calculation of GR values from division rates for Case "C"
+
+CHANGES IN VERSION 1.3.1
+-------------------------
+
+- Added calculation of GR values from division rates for Case "A"
+  - now accepts columns "duration" and "division_time" instead of 
+    "cell_count__time0"
+- Added a few parameters to calculation
+  - "control_cell_doublings" is the number of cell doublings that occur 
+    in the control population over the assay, calculated either from 
+    initial and final cell counts or given division rate and time of assay.
+  - "concentration_points" is the number of different concentrations used 
+    in an experiment

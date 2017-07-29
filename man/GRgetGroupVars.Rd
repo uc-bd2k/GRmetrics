@@ -35,11 +35,10 @@ groupingVariables = c('cell_line','agent'))
 groupVars = GRgetGroupVars(output1)
 groupVars
 }
-\author{
-Nicholas Clark
-}
 \seealso{
 To create the object needed for this function, see
 \code{\link{GRfit}}.
 }
-
+\author{
+Nicholas Clark
+}

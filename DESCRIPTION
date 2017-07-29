@@ -1,8 +1,8 @@
 Package: GRmetrics
 Type: Package
 Title: Calculate growth-rate inhibition (GR) metrics
-Version: 1.3.1
-Date: 2017-03-24
+Version: 1.3.2
+Date: 2017-07-28
 Author: Nicholas Clark
 Maintainer: Nicholas Clark <nicholas.clark00@gmail.com>, Mario Medvedovic 
         <medvedm@ucmail.uc.edu>
@@ -16,6 +16,6 @@ BugReports: https://github.com/uc-bd2k/GRmetrics/issues
 LazyData: TRUE
 Depends: R (>= 3.3), SummarizedExperiment
 Imports: drc, plotly, ggplot2, S4Vectors
-RoxygenNote: 5.0.1
+RoxygenNote: 6.0.1
 Suggests: knitr, rmarkdown, BiocStyle
 VignetteBuilder: knitr

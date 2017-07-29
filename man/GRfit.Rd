@@ -48,7 +48,7 @@ by case "A" or case "C" described in the details below.
 \details{
 Calculation of GR values is performed by the function \code{.GRcalculate}
 according to the "Online Methods" section of Hafner and Niepel et al.
-(\url{http://dx.doi.org/10.1038/nmeth.3853}).
+(2016, \url{http://dx.doi.org/10.1038/nmeth.3853}).
 
 The fitting of the logistic curve is performed by the \code{.GRlogisticFit}
 function, which calls the \code{drm} function from the \code{drc} package
@@ -109,10 +109,33 @@ cell number)
 
 All other columns will be treated as additional keys on which the data
 will be grouped (e.g. cell_line, drug, replicate)
+
+GR values and dose-response curves/metrics can also be computed using
+division times for (untreated) cell lines in the place of time zero cell
+counts, using the first formula in the Supplement of Hafner et al. (2017,
+\url{http://dx.doi.org/10.1038/nbt.3882}).
+
+To use division rate instead of initial cell count,
+inputData should not have any initial cell counts (i.e. For Case "A", no 
+"cell_count__time0" column. For Case "C", no values of 0 in the "time" 
+column) and should instead have two columns "treatment_duration" and 
+"division_time".
+
+In the first column, "treatment duration", one should have the duration of 
+the assay between time of treatment and the final cell counts (e.g. 72 for 
+hours in a typical 3-day assay). In the second column, "division_time", one 
+should have the time it takes for one cell doubling to occur in each
+(untreated) cell line used under the conditions of the experiment. These 
+two columns must contain numbers (no units), but need to refer to the same
+units (e.g. hours). In most cases, all experiments of a particular cell 
+line would have the same "division_time", however if the division rate of 
+untreated cells varied on another parameter, for example seeding density,
+it would be appropriate to measure and input division times based on 
+cell line/seeding density pairs.
 }
 \note{
 To see the underlying code, use (\code{getAnywhere(.GRlogistic_3u)}), 
-(\code{getAnywhere(.IClogistic_3u)}),
+(\code{getAnywhere(.rel_cell_logistic_3u)}),
 (\code{getAnywhere(.GRcalculate)}), and (\code{getAnywhere(.GRlogisticFit)})
 }
 \examples{
@@ -154,14 +177,16 @@ write.table(GRgetValues(output1), file = "filename.csv", quote = FALSE,
 sep = ",", row.names = FALSE)
 }
 }
-\author{
-Nicholas Clark
-}
 \references{
-Hafner, M., Niepel, M. Chung, M. and Sorger, P.K.,
+Hafner, M., Niepel, M., Chung, M., and Sorger, P.K.,
 "Growth Rate Inhibition Metrics Correct For Confounders In Measuring
 Sensitivity To Cancer Drugs". \emph{Nature Methods} 13.6 (2016): 521-527.
 \url{http://dx.doi.org/10.1038/nmeth.3853}
+
+Hafner, M., Niepel, M., Sorger, P.K.,
+"Alternative drug sensitivity metrics improve preclinical cancer
+pharmacogenomics". \emph{Nature Biotechnology} 35.6 (2017): 500-502.
+\url{http://dx.doi.org/10.1038/nbt.3882}
 }
 \seealso{
 See \code{\link{drm}} for the general logistic fit function that
@@ -172,4 +197,6 @@ options of this function. Use the functions \code{\link{GRdrawDRC}},
 using the output from this function. For online GR calculator and browser,
 see \url{http://www.grcalculator.org}.
 }
-
+\author{
+Nicholas Clark
+}
