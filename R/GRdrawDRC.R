@@ -57,6 +57,9 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
   if(points == FALSE & curves == FALSE) {
     stop('You must show either points or curves or both')
   }
+  if(metric == "IC") {
+    message('For the traditional dose-response curve based on relative cell counts, please use metric = "rel_cell" instead of metric = "IC". This notation has been changed as of Version 1.3.2.')
+  }
   # declaring values NULL to avoid note on package check
   log10_concentration = NULL
   experiment = NULL
@@ -99,7 +102,7 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
       GRinf = parameterTable$GRinf[row]
       h_GR = parameterTable$h_GR[row]
       logistic_3u = function(c){GRinf + (1 - GRinf)/(1 + (c/GEC50)^h_GR)}
-    } else if (metric == "rel_cell") {
+    } else if (metric %in% c("rel_cell", "IC")) {
       EC50 = parameterTable$EC50[row]
       Einf = parameterTable$Einf[row]
       h = parameterTable$h[row]
@@ -114,7 +117,7 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
         GR = parameterTable$flat_fit_GR[row]
       }
       curve_data = cbind(curve_data, GR)
-    } else if(metric == "rel_cell") {
+    } else if(metric %in% c("rel_cell", "IC")) {
       if(parameterTable$fit_rel_cell[row] == "sigmoid") {
         rel_cell_count = apply(curve_data, 1, logistic_3u)
       } else {
@@ -156,7 +159,7 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
       ggplot2::geom_hline(yintercept = 0.5, size = .25) +
       ggplot2::geom_hline(yintercept = 0, size = .25) +
       ggplot2::geom_hline(yintercept = -1, size = .25)
-  } else if(metric == "rel_cell") {
+  } else if(metric %in% c("rel_cell", "IC")) {
     if(points == TRUE & curves == FALSE) {
       p = ggplot2::ggplot(data = data, ggplot2::aes(x = log10_concentration,
           y = rel_cell_count, colour = experiment)) + ggplot2::geom_point()
