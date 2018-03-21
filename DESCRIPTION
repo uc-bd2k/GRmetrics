@@ -1,8 +1,8 @@
 Package: GRmetrics
 Type: Package
 Title: Calculate growth-rate inhibition (GR) metrics
-Version: 1.5.1
-Date: 2017-07-29
+Version: 1.5.2
+Date: 2018-03-21
 Author: Nicholas Clark
 Maintainer: Nicholas Clark <nicholas.clark00@gmail.com>, Mario Medvedovic 
         <medvedm@ucmail.uc.edu>

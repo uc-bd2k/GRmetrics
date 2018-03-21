@@ -133,6 +133,7 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
       curve_data_all = rbind(curve_data_all, curve_data)
     }
   }
+  curve_data_all = merge(curve_data_all, parameterTable[, c(groupingVariables, "experiment")])
   curve_data_all$experiment = as.factor(curve_data_all$experiment)
 
   if(metric == "GR") {
