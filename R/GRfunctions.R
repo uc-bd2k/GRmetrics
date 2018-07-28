@@ -114,7 +114,10 @@
         fct=drc::LL.3u(names=c('h_GR','GRinf','GEC50')), start = priors,
         lowerl = lower, upperl = upper, control = controls,
         na.action = na.omit))
-      if(class(output_model_new)!="try-error") {
+      if(class(output_model_new) == "drc" && 
+         !is.null(stats::coef(output_model_new)) && 
+         !is.null(stats::residuals(output_model_new))
+         ) {
         parameters[i,] = c(as.numeric(stats::coef(output_model_new)))
         # F-test for the significance of the sigmoidal fit
         Npara = 3 # N of parameters in the growth curve
@@ -128,6 +131,10 @@
         f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
         pval_GR[i] = f_pval
         R_square_GR[i] = 1 - RSS2/RSS1
+      } else {
+        parameters[i,] = NA
+        pval_GR[i] = NA
+        R_square_GR[i] = NA
       }
       # Relative cell count curve fitting
       output_model_new_rel_cell = try(drc::drm(
@@ -135,7 +142,10 @@
         fct=drc::LL.3u(names=c('h','Einf','EC50')), start = priors_rel_cell,
         lowerl = lower_rel_cell, upperl = upper_rel_cell, control = controls,
         na.action = na.omit))
-      if(class(output_model_new_rel_cell)!="try-error") {
+      if(class(output_model_new_rel_cell) == "drc" && 
+         !is.null(stats::coef(output_model_new_rel_cell)) && 
+         !is.null(stats::residuals(output_model_new_rel_cell))
+         ) {
         parameters2[i,] = c(as.numeric(stats::coef(output_model_new_rel_cell)))
         # F-test for the significance of the sigmoidal fit
         Npara = 3 # N of parameters in the growth curve
@@ -149,6 +159,10 @@
         f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
         pval_rel_cell[i] = f_pval
         R_square_rel_cell[i] = 1 - RSS2/RSS1
+      } else {
+        parameters2[i,] = NA
+        pval_rel_cell[i] = NA
+        R_square_rel_cell[i] = NA
       }
     }
     #==================================
