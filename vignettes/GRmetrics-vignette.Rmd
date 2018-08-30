@@ -46,8 +46,9 @@ data with these new metrics across multiple conditions and cell lines.
 The **GRmetrics** package can be installed through Bioconductor
 
 ```r
-source("http://bioconductor.org/biocLite.R")
-biocLite("GRmetrics")
+if (!requireNamespace("BiocManager", quietly=TRUE))
+    install.packages("BiocManager")
+BiocManager::install("GRmetrics")
 ```
 
 #References:
