@@ -2,8 +2,9 @@
 #install.packages('readr')      # un-comment and install these packages if necessary
 #install.packages('devtools')   # un-comment and install these packages if necessary
 ## try http:// if https:// URLs are not supported
-#source("https://bioconductor.org/biocLite.R")
-#biocLite("SummarizedExperiment")
+#if (!requireNamespace("BiocManager", quietly=TRUE))
+    #install.packages("BiocManager")
+#BiocManager::install("SummarizedExperiment")
 
 # Load GRmetrics functions
 library(GRmetrics)
