@@ -15,6 +15,7 @@
 #' values) will be plotted
 #' @param curves a logical value indicating whether sigmoidal dose-response
 #' curves will be plotted
+#' @param theme a ggplot or ggsci theme.
 #' @param plotly a logical value indicating whether to output a ggplot2 graph
 #' or a ggplotly graph
 #'
@@ -53,12 +54,29 @@
 
 GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
                       min = "auto", max = "auto",
-                      points = TRUE, curves = TRUE, plotly = TRUE) {
+                      points = TRUE, curves = TRUE,
+                      xrug = "none",
+                      yrug = "none",
+                      theme = "scale_color_npg",
+                      type = c("average", "all", "bars", "none", "obs", "confidence", "line"),
+                      facet_row = NULL,
+                      facet_col = NULL,
+                      plotly = FALSE) {
+  if(theme != "scale_color_npg") {
+    #### check that theme is a proper ggplot or ggsci function
+    #### if theme isn't found { 
+    ####  warning("theme not found, defaulting to 'scale_color_npg' theme.")
+    #### } else {
+    #### theme = "scale_color_npg"
+    #### }
+  }
   if(points == FALSE & curves == FALSE) {
     stop('You must show either points or curves or both')
   }
   if(metric == "IC") {
-    message('For the traditional dose-response curve based on relative cell counts, please use metric = "rel_cell" instead of metric = "IC". This notation has been changed as of Version 1.3.2.')
+    message('For the traditional dose-response curve based on relative cell counts, 
+            please use metric = "rel_cell" instead of metric = "IC". This notation 
+            has been changed as of Version 1.3.2.')
   }
   # declaring values NULL to avoid note on package check
   log10_concentration = NULL
@@ -136,8 +154,41 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
   curve_data_all = merge(curve_data_all, parameterTable[, c(groupingVariables, "experiment")])
   curve_data_all$experiment = as.factor(curve_data_all$experiment)
 
+  data$GRvalue = signif(data$GRvalue, 3)
+  data$log10_concentration = signif(data$log10_concentration, 3)
+  group_vars = GRgetGroupVars(fitData)
+  data_mean = data %>% group_by(experiment, log10_concentration, concentration) %>% 
+    #data_mean = data %>% group_by_at(c(group_vars, "log10_concentration")) %>% 
+    summarise(GRvalue_mean = mean(GRvalue, na.rm = TRUE), GRvalue_sd = sd(GRvalue, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(experiment = as.character(experiment))
+  ####### testing
+  #data$GRvalue_mean = 
+  #######
+  data_mean %<>% mutate_if(is.numeric, function(x) signif(x,3))
+  parameterTable %<>% mutate_if(is.numeric, function(x) signif(x,3))
+  curve_data_all %<>% mutate(log10_concentration = log10(Concentration)) %>%
+    mutate_if(is.numeric, function(x) signif(x,3))
   if(metric == "GR") {
-    if(points == TRUE & curves == FALSE) {
+    if(type == "lines") {
+      p = ggplot2::ggplot() + ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
+            y = GRvalue_mean, colour = experiment), size = 2.5) +
+            ggplot2::geom_line(data = data_mean, ggplot2::aes(x = log10_concentration,
+               y = GRvalue_mean, colour = experiment), size = 1.1) +
+            #### scale transformations don't work with plotly :(
+            # scale_x_continuous(
+            #               labels = trans_format("identity", math_format(10^.x)),
+            #               limits = c(-3.5, 1.5)
+            #) + annotation_logticks(sides = "b", short = unit(0.1, "cm"), mid = unit(0.2, "cm"),
+            #             long = unit(0.3, "cm"))
+            ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration,ymin = GRvalue_mean - GRvalue_sd,
+              ymax = GRvalue_mean + GRvalue_sd, colour = experiment), width = 0.5)
+    } else if(type == "average") {
+      p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
+            ggplot2::aes(x = log10(Concentration), y = GR,colour = experiment), size = 1.1) +
+        ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
+                                                      y = GRvalue_mean, colour = experiment), size = 2.5)
+    } else if(points == TRUE & curves == FALSE) {
       p = ggplot2::ggplot(data = data, ggplot2::aes(x = log10_concentration,
                           y = GRvalue, colour = experiment)) + ggplot2::geom_point()
     } else if(points == FALSE & curves == TRUE) {
@@ -146,20 +197,20 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
                           y = GR, colour = experiment)) + ggplot2::geom_line()
     } else if(points == TRUE & curves == TRUE) {
       p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
-        ggplot2::aes(x = log10(Concentration), y = GR,colour = experiment)) +
+        ggplot2::aes(x = log10_concentration, y = GR,colour = experiment), size = 1.1) +
         ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
-                                              y = GRvalue, colour = experiment))
+                                              y = GRvalue, colour = experiment), size = 2.5)
     }
     p = p + ggplot2::coord_cartesian(xlim = c(log10(min_conc)-0.1,
                                               log10(max_conc)+0.1),
                                      ylim = c(-1, 1.5), expand = TRUE) +
       ggplot2::ggtitle("Concentration vs. GR values") +
       ggplot2::xlab('Concentration (log10 scale)') +
-      ggplot2::ylab('GR value') + ggplot2::labs(colour = "") +
-      ggplot2::geom_hline(yintercept = 1, size = .25) +
-      ggplot2::geom_hline(yintercept = 0.5, size = .25) +
-      ggplot2::geom_hline(yintercept = 0, size = .25) +
-      ggplot2::geom_hline(yintercept = -1, size = .25)
+      ggplot2::ylab('GR value') +
+      #ggplot2::geom_hline(yintercept = 1, size = 1, linetype = "dashed") +
+      #ggplot2::geom_hline(yintercept = 0.5, size = 1, linetype = "dashed") +
+      #ggplot2::geom_hline(yintercept = -1, size = 1, linetype = "dashed")
+      ggplot2::geom_hline(yintercept = 0, size = 1, colour = "#1F77B4")
   } else if(metric %in% c("rel_cell", "IC")) {
     if(points == TRUE & curves == FALSE) {
       p = ggplot2::ggplot(data = data, ggplot2::aes(x = log10_concentration,
@@ -170,7 +221,7 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
           y = rel_cell_count, colour = experiment)) + ggplot2::geom_line()
     } else if(points == TRUE & curves == TRUE) {
       p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
-        ggplot2::aes(x = log10(Concentration), y = rel_cell_count,
+        ggplot2::aes(x = log10_concentration, y = rel_cell_count,
                      colour = experiment)) +
         ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
                             y = rel_cell_count, colour = experiment))
@@ -184,6 +235,31 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
       ggplot2::geom_hline(yintercept = 1, size = .25) +
       ggplot2::geom_hline(yintercept = 0.5, size = .25) +
       ggplot2::geom_hline(yintercept = 0, size = .25)
+  }
+  ### Change code above so that curve parameters are called the same thing
+  ### for GR and traditional curve. Then change rug names below to agree with this.
+  ### Maybe make an option for marginal plots of GR metrics instead of rugs.
+  ### Check how to change color scheme so that colors get used more than once
+  ### instead of running out of colors
+  xrug_options = c("none", "GR50", "GEC50", "IC50", "EC50")
+  assertthat::assert_that(is.character(xrug) && length(xrug) == 1)
+  assertthat::assert_that(xrug %in% xrug_options, 
+    msg = 'xrug must be one of the following: "none", "GR50", "GEC50", "IC50", "EC50"')
+  
+  yrug_options = c("none", "GRinf", "GRmax", "Einf", "Emax")
+  assertthat::assert_that(is.character(yrug) && length(yrug) == 1)
+  assertthat::assert_that(yrug %in% yrug_options, 
+    msg = 'yrug must be one of the following: "none", "GRinf", "GRmax", "Einf", "Emax"')
+  
+  rug_size = 1.5
+  if(xrug != "none") p = p + ggplot2::geom_rug(data = parameterTable, 
+                              ggplot2::aes_string(x = paste0("log10_", xrug), colour = "experiment"), size = rug_size)
+  if(yrug != "none") p = p + ggplot2::geom_rug(data = parameterTable, 
+                              ggplot2::aes_string(y = yrug, colour = "experiment"), size = rug_size)
+  p = p + ggplot2::theme_classic() #+ do.call(theme, args = list())
+  if(!is.null(facet_row)) {
+    assertthat::assert_that(facet_row %in% group_vars)
+    
   }
   if(plotly == TRUE) {
     q = plotly::ggplotly(p)
