@@ -54,25 +54,36 @@
 
 GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
                       min = "auto", max = "auto",
-                      points = TRUE, curves = TRUE,
-                      xrug = "none",
-                      yrug = "none",
-                      theme = "scale_color_npg",
-                      type = c("average", "all", "bars", "none", "obs", "confidence", "line"),
+                      points = c("average", "all", "none"),
+                      curves = c("fit", "line", "none"),
+                      bars = c("none", "sd", "se"),
+                      xrug = c("none", "GR50", "GEC50", "IC50", "EC50"),
+                      yrug = c("none", "GRinf", "GRmax", "Einf", "Emax"),
+                      theme = c("classic", "minimal", "bw"),
+                      palette = c("default","npg", "aaas"),
                       facet_row = NULL,
                       facet_col = NULL,
                       plotly = FALSE) {
-  if(theme != "scale_color_npg") {
-    #### check that theme is a proper ggplot or ggsci function
-    #### if theme isn't found { 
-    ####  warning("theme not found, defaulting to 'scale_color_npg' theme.")
-    #### } else {
-    #### theme = "scale_color_npg"
-    #### }
-  }
-  if(points == FALSE & curves == FALSE) {
-    stop('You must show either points or curves or both')
-  }
+  
+  # palette = palette[1]
+  # assertthat::assert_that(palette %in% c("default","npg", "aaas"), 
+  #                         msg = "palette must be one of the following: 'default', 'npg', 'aaas'")
+  # check that xrug and yrug are allowed
+  xrug_options = c("none", "GR50", "GEC50", "IC50", "EC50")
+  assertthat::assert_that(is.character(xrug) && length(xrug) == 1)
+  assertthat::assert_that(xrug %in% xrug_options, 
+    msg = 'xrug must be one of the following: "none", "GR50", "GEC50", "IC50", "EC50"')
+  
+  yrug_options = c("none", "GRinf", "GRmax", "Einf", "Emax")
+  assertthat::assert_that(is.character(yrug) && length(yrug) == 1)
+  assertthat::assert_that(yrug %in% yrug_options, 
+    msg = 'yrug must be one of the following: "none", "GRinf", "GRmax", "Einf", "Emax"')
+  ##### add check to make sure the rug matches the metric... e.g. GR50 rug only for "GR" curve
+  # check that facets are allowed
+  assertthat::assert_that(facet_row %in% c("none", group_vars))
+  assertthat::assert_that(facet_col %in% c("none", group_vars))
+  assertthat::assert_that(facet_col != facet_row | (facet_col == "none" && facet_row == "none"),
+                          msg = "facet_col and facet_row must be different")
   if(metric == "IC") {
     message('For the traditional dose-response curve based on relative cell counts, 
             please use metric = "rel_cell" instead of metric = "IC". This notation 
@@ -157,8 +168,8 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
   data$GRvalue = signif(data$GRvalue, 3)
   data$log10_concentration = signif(data$log10_concentration, 3)
   group_vars = GRgetGroupVars(fitData)
-  data_mean = data %>% group_by(experiment, log10_concentration, concentration) %>% 
-    #data_mean = data %>% group_by_at(c(group_vars, "log10_concentration")) %>% 
+  #data_mean = data %>% group_by(experiment, log10_concentration, concentration) %>% 
+  data_mean = data %>% group_by_at(c(group_vars, "experiment", "concentration", "log10_concentration")) %>% 
     summarise(GRvalue_mean = mean(GRvalue, na.rm = TRUE), GRvalue_sd = sd(GRvalue, na.rm = TRUE)) %>%
     ungroup() %>%
     mutate(experiment = as.character(experiment))
@@ -169,38 +180,38 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
   parameterTable %<>% mutate_if(is.numeric, function(x) signif(x,3))
   curve_data_all %<>% mutate(log10_concentration = log10(Concentration)) %>%
     mutate_if(is.numeric, function(x) signif(x,3))
+  # initialize plot
+  p = ggplot2::ggplot()
   if(metric == "GR") {
-    if(type == "lines") {
-      p = ggplot2::ggplot() + ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
-            y = GRvalue_mean, colour = experiment), size = 2.5) +
-            ggplot2::geom_line(data = data_mean, ggplot2::aes(x = log10_concentration,
-               y = GRvalue_mean, colour = experiment), size = 1.1) +
+    # add curves to the plot
+    if(curves == "line") {
+      p = p + ggplot2::geom_line(data = data_mean, ggplot2::aes(x = log10_concentration,
+            y = GRvalue_mean, colour = experiment), size = 1.1)
             #### scale transformations don't work with plotly :(
             # scale_x_continuous(
             #               labels = trans_format("identity", math_format(10^.x)),
             #               limits = c(-3.5, 1.5)
             #) + annotation_logticks(sides = "b", short = unit(0.1, "cm"), mid = unit(0.2, "cm"),
             #             long = unit(0.3, "cm"))
-            ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration,ymin = GRvalue_mean - GRvalue_sd,
-              ymax = GRvalue_mean + GRvalue_sd, colour = experiment), width = 0.5)
-    } else if(type == "average") {
-      p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
-            ggplot2::aes(x = log10(Concentration), y = GR,colour = experiment), size = 1.1) +
-        ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
-                                                      y = GRvalue_mean, colour = experiment), size = 2.5)
-    } else if(points == TRUE & curves == FALSE) {
-      p = ggplot2::ggplot(data = data, ggplot2::aes(x = log10_concentration,
-                          y = GRvalue, colour = experiment)) + ggplot2::geom_point()
-    } else if(points == FALSE & curves == TRUE) {
-      p = ggplot2::ggplot(data = curve_data_all,
-                          ggplot2::aes(x = log10(Concentration),
-                          y = GR, colour = experiment)) + ggplot2::geom_line()
-    } else if(points == TRUE & curves == TRUE) {
-      p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
-        ggplot2::aes(x = log10_concentration, y = GR,colour = experiment), size = 1.1) +
-        ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
-                                              y = GRvalue, colour = experiment), size = 2.5)
+            # ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration,ymin = GRvalue_mean - GRvalue_sd,
+            #   ymax = GRvalue_mean + GRvalue_sd, colour = experiment), width = 0.5)
+    } else if(curves == "fit") {
+      p = p + ggplot2::geom_line(data = curve_data_all,
+            ggplot2::aes(x = log10_concentration, y = GR, colour = experiment), size = 1.1)
+    } else if(curves == "none") {
+      # do nothing
     }
+    # add points to the plot
+    if(points == "average") {
+      p = p + ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
+        y = GRvalue_mean, colour = experiment), size = 2.5)
+    } else if(points == "all") {
+      p = p + ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
+            y = GRvalue, colour = experiment))
+    } else if(points == "none") {
+      # do nothing
+    }
+    # set x and y range for plot, set labels, add horizontal lines
     p = p + ggplot2::coord_cartesian(xlim = c(log10(min_conc)-0.1,
                                               log10(max_conc)+0.1),
                                      ylim = c(-1, 1.5), expand = TRUE) +
@@ -241,26 +252,22 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
   ### Maybe make an option for marginal plots of GR metrics instead of rugs.
   ### Check how to change color scheme so that colors get used more than once
   ### instead of running out of colors
-  xrug_options = c("none", "GR50", "GEC50", "IC50", "EC50")
-  assertthat::assert_that(is.character(xrug) && length(xrug) == 1)
-  assertthat::assert_that(xrug %in% xrug_options, 
-    msg = 'xrug must be one of the following: "none", "GR50", "GEC50", "IC50", "EC50"')
   
-  yrug_options = c("none", "GRinf", "GRmax", "Einf", "Emax")
-  assertthat::assert_that(is.character(yrug) && length(yrug) == 1)
-  assertthat::assert_that(yrug %in% yrug_options, 
-    msg = 'yrug must be one of the following: "none", "GRinf", "GRmax", "Einf", "Emax"')
-  
+  # add rugs to plot
   rug_size = 1.5
   if(xrug != "none") p = p + ggplot2::geom_rug(data = parameterTable, 
-                              ggplot2::aes_string(x = paste0("log10_", xrug), colour = "experiment"), size = rug_size)
+    ggplot2::aes_string(x = paste0("log10_", xrug), colour = "experiment"), size = rug_size)
   if(yrug != "none") p = p + ggplot2::geom_rug(data = parameterTable, 
-                              ggplot2::aes_string(y = yrug, colour = "experiment"), size = rug_size)
+    ggplot2::aes_string(y = yrug, colour = "experiment"), size = rug_size)
+  # add theme to plot
   p = p + ggplot2::theme_classic() #+ do.call(theme, args = list())
-  if(!is.null(facet_row)) {
-    assertthat::assert_that(facet_row %in% group_vars)
-    
+  # configure plot facets
+  if(facet_row != "none" | facet_col != "none") {
+    if(facet_row == "none") facet_row = "."
+    if(facet_col == "none") facet_col = "."
+    p = p + facet_grid(reformulate(facet_col,facet_row))
   }
+  # return ggplot or plotly object
   if(plotly == TRUE) {
     q = plotly::ggplotly(p)
     return(q)
