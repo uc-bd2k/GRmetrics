@@ -52,7 +52,18 @@
 #' GRdrawDRC(drc_output, plotly = FALSE)
 #' @export
 
-GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
+
+#### todo:
+# - add checks for additional inputs
+# - edit example and vignette to reflect new inputs
+# - add se option for error bars
+# - finish up palette and theme options
+# - add a message or error output noting updated function inputs
+# - figure out adding a geom to plotly (for log-ticks and scientific notation) or 
+#   how to make log-ticks from geom_segment only (should work with plotly) ( long-term )
+# - clean up "GRfit" object processing (with dplyr)
+# - fix for rel_cell curve and limit code duplication
+GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all",
                       min = "auto", max = "auto",
                       points = c("average", "all", "none"),
                       curves = c("fit", "line", "none"),
@@ -61,24 +72,47 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
                       yrug = c("none", "GRinf", "GRmax", "Einf", "Emax"),
                       theme = c("classic", "minimal", "bw"),
                       palette = c("default","npg", "aaas"),
-                      facet_row = NULL,
-                      facet_col = NULL,
-                      plotly = FALSE) {
+                      facet_row = "none",
+                      facet_col = "none",
+                      plot_type = c("static", "interactive")) {
   
-  # palette = palette[1]
+  # make all inputs length 1
+  metric = metric[1]
+  points = points[1]
+  curves = curves[1]
+  bars = bars[1]
+  xrug = xrug[1]
+  yrug = yrug[1]
+  theme = theme[1]
+  palette = palette[1]
+  # get grouping variables
+  group_vars = GRgetGroupVars(fitData)
   # assertthat::assert_that(palette %in% c("default","npg", "aaas"), 
   #                         msg = "palette must be one of the following: 'default', 'npg', 'aaas'")
+  # check that metric is allowed
+  assertthat::assert_that(is.character(metric))
+  assertthat::assert_that(metric %in% c("GR", "rel_cell"))
   # check that xrug and yrug are allowed
   xrug_options = c("none", "GR50", "GEC50", "IC50", "EC50")
-  assertthat::assert_that(is.character(xrug) && length(xrug) == 1)
+  assertthat::assert_that(is.character(xrug))
   assertthat::assert_that(xrug %in% xrug_options, 
     msg = 'xrug must be one of the following: "none", "GR50", "GEC50", "IC50", "EC50"')
   
   yrug_options = c("none", "GRinf", "GRmax", "Einf", "Emax")
-  assertthat::assert_that(is.character(yrug) && length(yrug) == 1)
+  assertthat::assert_that(is.character(yrug))
   assertthat::assert_that(yrug %in% yrug_options, 
     msg = 'yrug must be one of the following: "none", "GRinf", "GRmax", "Einf", "Emax"')
-  ##### add check to make sure the rug matches the metric... e.g. GR50 rug only for "GR" curve
+  # check to make sure the rug matches the metric... e.g. GR50 rug only for "GR" curve
+  # xrug
+  assertthat::assert_that(!(metric == "GR" && xrug %in% c("IC50", "EC50")),
+                          msg = 'For metric "GR", xrug must be "GR50" or GEC50"')
+  assertthat::assert_that(!(metric == "rel_cell" && xrug %in% c("GR50", "GEC50")),
+                          msg = 'For metric "rel_cell", xrug must be "IC50" or "EC50"')
+  # yrug
+  assertthat::assert_that(!(metric == "GR" && yrug %in% c("Einf", "Emax")),
+                          msg = 'For metric "GR", yrug must be "GRinf" or "GRmax"')
+  assertthat::assert_that(!(metric == "rel_cell" && yrug %in% c("GRinf", "GRmax")),
+                          msg = 'For metric "rel_cell", yrug must be "Einf" or "Emax"')
   # check that facets are allowed
   assertthat::assert_that(facet_row %in% c("none", group_vars))
   assertthat::assert_that(facet_col %in% c("none", group_vars))
@@ -167,19 +201,20 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
 
   data$GRvalue = signif(data$GRvalue, 3)
   data$log10_concentration = signif(data$log10_concentration, 3)
-  group_vars = GRgetGroupVars(fitData)
   #data_mean = data %>% group_by(experiment, log10_concentration, concentration) %>% 
-  data_mean = data %>% group_by_at(c(group_vars, "experiment", "concentration", "log10_concentration")) %>% 
-    summarise(GRvalue_mean = mean(GRvalue, na.rm = TRUE), GRvalue_sd = sd(GRvalue, na.rm = TRUE)) %>%
-    ungroup() %>%
-    mutate(experiment = as.character(experiment))
+  data_mean = data %>% dplyr::group_by_at(c(group_vars, "experiment", 
+                  "concentration", "log10_concentration")) %>%
+    dplyr::summarise(GRvalue_mean = mean(GRvalue, na.rm = TRUE), 
+                     GRvalue_sd = sd(GRvalue, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(experiment = as.character(experiment))
   ####### testing
   #data$GRvalue_mean = 
   #######
-  data_mean %<>% mutate_if(is.numeric, function(x) signif(x,3))
-  parameterTable %<>% mutate_if(is.numeric, function(x) signif(x,3))
-  curve_data_all %<>% mutate(log10_concentration = log10(Concentration)) %>%
-    mutate_if(is.numeric, function(x) signif(x,3))
+  data_mean %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3))
+  parameterTable %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3))
+  curve_data_all %<>% dplyr::mutate(log10_concentration = log10(Concentration)) %>%
+    dplyr::mutate_if(is.numeric, function(x) signif(x,3))
   # initialize plot
   p = ggplot2::ggplot()
   if(metric == "GR") {
@@ -204,17 +239,17 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
     # add points to the plot
     if(points == "average") {
       p = p + ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
-        y = GRvalue_mean, colour = experiment), size = 2.5)
+        y = GRvalue_mean, colour = experiment), size = 2)
     } else if(points == "all") {
       p = p + ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
-            y = GRvalue, colour = experiment))
+            y = GRvalue, colour = experiment), size = 2)
     } else if(points == "none") {
       # do nothing
     }
     # set x and y range for plot, set labels, add horizontal lines
     p = p + ggplot2::coord_cartesian(xlim = c(log10(min_conc)-0.1,
                                               log10(max_conc)+0.1),
-                                     ylim = c(-1, 1.5), expand = TRUE) +
+                                     ylim = c(-1, 1.5), expand = F) +
       ggplot2::ggtitle("Concentration vs. GR values") +
       ggplot2::xlab('Concentration (log10 scale)') +
       ggplot2::ylab('GR value') +
@@ -254,22 +289,44 @@ GRdrawDRC <- function(fitData, metric = "GR", experiments = "all",
   ### instead of running out of colors
   
   # add rugs to plot
-  rug_size = 1.5
-  if(xrug != "none") p = p + ggplot2::geom_rug(data = parameterTable, 
+  rug_size = 1.1
+  if(xrug != "none") p = p + ggplot2::geom_rug(data = parameterTable,
     ggplot2::aes_string(x = paste0("log10_", xrug), colour = "experiment"), size = rug_size)
-  if(yrug != "none") p = p + ggplot2::geom_rug(data = parameterTable, 
+  if(yrug != "none") p = p + ggplot2::geom_rug(data = parameterTable,
     ggplot2::aes_string(y = yrug, colour = "experiment"), size = rug_size)
+  ### alternative way to do the rug... allows for length control (good), but xrug and yrug 
+  ### can look like different lengths on the screen (bad)
+  # rug_len = 0.25
+  # if(xrug != "none") {
+  #   p = p + ggplot2::geom_segment(data = parameterTable, 
+  #     ggplot2::aes_string(x = paste0("log10_", xrug), xend = paste0("log10_", xrug),
+  #                         y = p$coordinates$limits$y[1], yend = p$coordinates$limits$y[1] + rug_len,
+  #                         colour = "experiment"), size = rug_size)
+  # }
+  # if(yrug != "none") {
+  #   p = p + ggplot2::geom_segment(data = parameterTable, 
+  #     ggplot2::aes_string(x = p$coordinates$limits$x[1], xend = p$coordinates$limits$x[1] + rug_len,
+  #                         y = yrug, yend = yrug,
+  #                         colour = "experiment"), size = rug_size)
+  # }
   # add theme to plot
   p = p + ggplot2::theme_classic() #+ do.call(theme, args = list())
+  # add palette to plot
+  ###p = p + scale_colour_npg()
   # configure plot facets
   if(facet_row != "none" | facet_col != "none") {
     if(facet_row == "none") facet_row = "."
     if(facet_col == "none") facet_col = "."
-    p = p + facet_grid(reformulate(facet_col,facet_row))
+    p = p + ggplot2::facet_grid(stats::reformulate(facet_col,facet_row))
   }
   # return ggplot or plotly object
-  if(plotly == TRUE) {
-    q = plotly::ggplotly(p)
+  if(plot_type == "interactive") {
+    if(facet_row != ".") {
+      # give extra x-axis space so that the legend doesn't overlap labels
+      q = plotly::ggplotly(p) %>% plotly::layout(legend = list(x = 1.05))
+    } else {
+      q = plotly::ggplotly(p)
+    }
     return(q)
   } else {
     return(p)

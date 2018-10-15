@@ -14,8 +14,8 @@ License: GPL-3
 URL: https://github.com/uc-bd2k/GRmetrics
 BugReports: https://github.com/uc-bd2k/GRmetrics/issues
 LazyData: TRUE
-Depends: R (>= 3.3), SummarizedExperiment
-Imports: drc, plotly, ggplot2, S4Vectors, ggsci, assertthat
+Depends: R (>= 3.3), SummarizedExperiment, ggplot2, plotly
+Imports: drc, S4Vectors, ggsci, assertthat, dplyr, magrittr
 RoxygenNote: 6.0.1
 Suggests: knitr, rmarkdown, BiocStyle
 VignetteBuilder: knitr
