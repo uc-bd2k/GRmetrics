@@ -123,6 +123,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
             please use metric = "rel_cell" instead of metric = "IC". This notation 
             has been changed as of Version 1.3.2.')
   }
+  
   # declaring values NULL to avoid note on package check
   log10_concentration = NULL
   experiment = NULL
@@ -143,61 +144,80 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
                                       experiments, ]
     data = data[data$experiment %in% experiments, ]
   }
-  exps = unique(parameterTable$experiment)
-  if(min == "auto") {
-    min_conc = min(data$concentration, na.rm = TRUE)
-  } else {
-    min_conc = min
-  }
-  if(max == "auto") {
-    max_conc = max(data$concentration, na.rm = TRUE)
-  } else {
-    max_conc = max
-  }
-  len = (log10(max_conc) - log10(min_conc))*100
-  Concentration = 10^(seq(log10(min_conc) - 1, log10(max_conc) + 1,
+  if(min == "auto") min = min(data$concentration, na.rm = TRUE)
+  if(max == "auto") max = max(data$concentration, na.rm = TRUE)
+  # define x support for curve
+  len = (log10(max) - log10(min))*100
+  concentration = 10^(seq(log10(min) - 1, log10(max) + 1,
                           length.out = len))
-  curve_data_all = NULL
-  for(exp in exps) {
-    row = which(parameterTable$experiment == exp)
-    if(metric == "GR") {
-      GEC50 = parameterTable$GEC50[row]
-      GRinf = parameterTable$GRinf[row]
-      h_GR = parameterTable$h_GR[row]
-      logistic_3u = function(c){GRinf + (1 - GRinf)/(1 + (c/GEC50)^h_GR)}
-    } else if (metric %in% c("rel_cell", "IC")) {
-      EC50 = parameterTable$EC50[row]
-      Einf = parameterTable$Einf[row]
-      h = parameterTable$h[row]
-      logistic_3u = function(c){Einf + (1 - Einf)/(1 + (c/EC50)^h)}
-    }
-    curve_data = as.matrix(Concentration)
-    colnames(curve_data) = "Concentration"
-    if(metric == "GR") {
-      if(parameterTable$fit_GR[row] == "sigmoid") {
-        GR = apply(curve_data, 1, logistic_3u)
-      } else {
-        GR = parameterTable$flat_fit_GR[row]
-      }
-      curve_data = cbind(curve_data, GR)
-    } else if(metric %in% c("rel_cell", "IC")) {
-      if(parameterTable$fit_rel_cell[row] == "sigmoid") {
-        rel_cell_count = apply(curve_data, 1, logistic_3u)
-      } else {
-        rel_cell_count = parameterTable$flat_fit_rel_cell[row]
-      }
-      curve_data = cbind(curve_data, rel_cell_count)
-    }
-    curve_data = as.data.frame(curve_data)
-    curve_data$experiment = exp
-    if(is.null(curve_data_all)){
-      curve_data_all = curve_data
-    } else {
-      curve_data_all = rbind(curve_data_all, curve_data)
-    }
+  # filter table of fit parameters to only selected experiments
+  parameterTable %<>% filter(experiment %in% exps) %>% as_tibble()
+  # define function for curve mapping
+  .create_curve_data = function(EC50, Einf, h, fit_type, flat_fit, experiment, c) {
+    df = data.frame(experiment = experiment, concentration = c, log10_concentration = log10(c))
+    if(fit_type == "sigmoid") df$y_val = Einf + (1 - Einf)/(1 + (c/EC50)^h)
+    if(fit_type == "flat") df$y_val = flat_fit
+    #if(fit_type == "biphasic") df$y_val = NA ### make df for biphasic fit
+    return(df)
   }
-  curve_data_all = merge(curve_data_all, parameterTable[, c(groupingVariables, "experiment")])
-  curve_data_all$experiment = as.factor(curve_data_all$experiment)
+  # make list (tibble) of inputs for curve
+  if(metric == "rel_cell") {
+    curve_input_list = parameterTable %>% dplyr::select(EC50, Einf, h, fit_rel_cell, flat_fit_rel_cell, experiment) %>%
+      dplyr::rename(fit_type = fit_rel_cell, flat_fit = flat_fit_rel_cell) %>% dplyr::as_tibble() %>%
+      dplyr::mutate(c = list(concentration))
+  } else if(metric == "GR") {
+    curve_input_list = parameterTable %>% dplyr::select(GEC50, GRinf, h_GR, fit_GR, flat_fit_GR, experiment) %>%
+      dplyr::rename(EC50 = GEC50, Einf = GRinf, h = h_GR, fit_type = fit_GR, flat_fit = flat_GR) %>% 
+      dplyr::as_tibble() %>% dplyr::mutate(c = list(concentration))
+  }
+  # Get data frames for curves to give to ggplot
+  curve_data_all = pmap_dfr(.l = curve_input_list, .f = .create_curve_data)
+
+  # len = (log10(max) - log10(min))*100
+  # Concentration = 10^(seq(log10(min) - 1, log10(max) + 1,
+  #                         length.out = len))
+  # curve_data_all = NULL
+  # exps = unique(parameterTable$experiment)
+  # for(exp in exps) {
+  #   row = which(parameterTable$experiment == exp)
+  #   if(metric == "GR") {
+  #     GEC50 = parameterTable$GEC50[row]
+  #     GRinf = parameterTable$GRinf[row]
+  #     h_GR = parameterTable$h_GR[row]
+  #     logistic_3u = function(c){GRinf + (1 - GRinf)/(1 + (c/GEC50)^h_GR)}
+  #   } else if (metric %in% c("rel_cell", "IC")) {
+  #     EC50 = parameterTable$EC50[row]
+  #     Einf = parameterTable$Einf[row]
+  #     h = parameterTable$h[row]
+  #     logistic_3u = function(c){Einf + (1 - Einf)/(1 + (c/EC50)^h)}
+  #   }
+  #   curve_data = as.matrix(concentration)
+  #   colnames(curve_data) = "Concentration"
+  #   if(metric == "GR") {
+  #     if(parameterTable$fit_GR[row] == "sigmoid") {
+  #       GR = apply(curve_data, 1, logistic_3u)
+  #     } else {
+  #       GR = parameterTable$flat_fit_GR[row]
+  #     }
+  #     curve_data = cbind(curve_data, GR)
+  #   } else if(metric %in% c("rel_cell", "IC")) {
+  #     if(parameterTable$fit_rel_cell[row] == "sigmoid") {
+  #       rel_cell_count = apply(curve_data, 1, logistic_3u)
+  #     } else {
+  #       rel_cell_count = parameterTable$flat_fit_rel_cell[row]
+  #     }
+  #     curve_data = cbind(curve_data, rel_cell_count)
+  #   }
+  #   curve_data = as.data.frame(curve_data)
+  #   curve_data$experiment = exp
+  #   if(is.null(curve_data_all)){
+  #     curve_data_all = curve_data
+  #   } else {
+  #     curve_data_all = rbind(curve_data_all, curve_data)
+  #   }
+  # }
+  # curve_data_all = merge(curve_data_all, parameterTable[, c(groupingVariables, "experiment")])
+  # curve_data_all$experiment = as.factor(curve_data_all$experiment)
 
   data$GRvalue = signif(data$GRvalue, 3)
   data$log10_concentration = signif(data$log10_concentration, 3)
@@ -213,7 +233,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   #######
   data_mean %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3))
   parameterTable %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3))
-  curve_data_all %<>% dplyr::mutate(log10_concentration = log10(Concentration)) %>%
+  curve_data_all %<>% dplyr::mutate(log10_concentration = log10(concentration)) %>%
     dplyr::mutate_if(is.numeric, function(x) signif(x,3))
   # initialize plot
   p = ggplot2::ggplot()
@@ -247,8 +267,8 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
       # do nothing
     }
     # set x and y range for plot, set labels, add horizontal lines
-    p = p + ggplot2::coord_cartesian(xlim = c(log10(min_conc)-0.1,
-                                              log10(max_conc)+0.1),
+    p = p + ggplot2::coord_cartesian(xlim = c(log10(min)-0.1,
+                                              log10(max)+0.1),
                                      ylim = c(-1, 1.5), expand = F) +
       ggplot2::ggtitle("Concentration vs. GR values") +
       ggplot2::xlab('Concentration (log10 scale)') +
@@ -263,7 +283,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
           y = rel_cell_count, colour = experiment)) + ggplot2::geom_point()
     } else if(points == FALSE & curves == TRUE) {
       p = ggplot2::ggplot(data = curve_data_all,
-                          ggplot2::aes(x = log10(Concentration),
+                          ggplot2::aes(x = log10(concentration),
           y = rel_cell_count, colour = experiment)) + ggplot2::geom_line()
     } else if(points == TRUE & curves == TRUE) {
       p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
@@ -272,8 +292,8 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
         ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
                             y = rel_cell_count, colour = experiment))
     }
-    p = p + ggplot2::coord_cartesian(xlim = c(log10(min_conc)-0.1,
-                                              log10(max_conc)+0.1),
+    p = p + ggplot2::coord_cartesian(xlim = c(log10(min)-0.1,
+                                              log10(max)+0.1),
                                      ylim = c(0, 1.5), expand = TRUE) +
       ggplot2::ggtitle("Concentration vs. Relative cell count") +
       ggplot2::xlab('Concentration (log10 scale)') +
