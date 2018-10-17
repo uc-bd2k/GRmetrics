@@ -56,13 +56,10 @@
 #### todo:
 # - add checks for additional inputs
 # - edit example and vignette to reflect new inputs
-# - add se option for error bars
 # - finish up palette and theme options
 # - add a message or error output noting updated function inputs
 # - figure out adding a geom to plotly (for log-ticks and scientific notation) or 
 #   how to make log-ticks from geom_segment only (should work with plotly) ( long-term )
-# - clean up "GRfit" object processing (with dplyr)
-# - fix for rel_cell curve and limit code duplication
 GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all",
                       min = "auto", max = "auto",
                       points = c("average", "all", "none"),
@@ -118,40 +115,24 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   assertthat::assert_that(facet_col %in% c("none", group_vars))
   assertthat::assert_that(facet_col != facet_row | (facet_col == "none" && facet_row == "none"),
                           msg = "facet_col and facet_row must be different")
-  if(metric == "IC") {
-    message('For the traditional dose-response curve based on relative cell counts, 
-            please use metric = "rel_cell" instead of metric = "IC". This notation 
-            has been changed as of Version 1.3.2.')
-  }
-  
-  # declaring values NULL to avoid note on package check
-  log10_concentration = NULL
-  experiment = NULL
+  assertthat::assert_that(metric != "IC", msg = 'For the traditional dose-response curve based on relative cell counts, please use metric = "rel_cell" instead of metric = "IC". This notation has been changed as of Version 1.3.2.')
+  # data frame for points
   data = S4Vectors::metadata(fitData)[[1]]
-  parameterTable = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
-                        t(SummarizedExperiment::assay(fitData)))
-  groupingVariables = S4Vectors::metadata(fitData)[[2]]
-  data$log10_concentration = log10(data$concentration)
-  tmp<-data[,groupingVariables, drop = FALSE]
-  experimentNew = (apply(tmp,1, function(x) (paste(x,collapse=" "))))
-  if(length(groupingVariables) > 0) {
-    data$experiment = as.factor(experimentNew)
-  } else {
-    data$experiment = as.factor("All Data")
-  }
+  # data frame for metrics, to make curves and rugs
+  parameterTable = GRgetMetrics(fitData) %>% as_tibble()
+  if(length(group_vars) == 0) data$experiment = "All Data"
+  # change experiment to character from factor if necessary
+  data$experiment = as.character(data$experiment) 
+  # filter to only selected experiments
   if(!identical(experiments, "all")) {
-    parameterTable = parameterTable[parameterTable$experiment %in%
-                                      experiments, ]
-    data = data[data$experiment %in% experiments, ]
+    parameterTable %<>% dplyr::filter(experiment %in% experiments)
+    data %<>% dplyr::filter(experiment %in% experiments)
   }
   if(min == "auto") min = min(data$concentration, na.rm = TRUE)
   if(max == "auto") max = max(data$concentration, na.rm = TRUE)
   # define x support for curve
   len = (log10(max) - log10(min))*100
-  concentration = 10^(seq(log10(min) - 1, log10(max) + 1,
-                          length.out = len))
-  # filter table of fit parameters to only selected experiments
-  parameterTable %<>% filter(experiment %in% exps) %>% as_tibble()
+  concentration = 10^(seq(log10(min) - 1, log10(max) + 1, length.out = len))
   # define function for curve mapping
   .create_curve_data = function(EC50, Einf, h, fit_type, flat_fit, experiment, c) {
     df = data.frame(experiment = experiment, concentration = c, log10_concentration = log10(c))
@@ -167,145 +148,96 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
       dplyr::mutate(c = list(concentration))
   } else if(metric == "GR") {
     curve_input_list = parameterTable %>% dplyr::select(GEC50, GRinf, h_GR, fit_GR, flat_fit_GR, experiment) %>%
-      dplyr::rename(EC50 = GEC50, Einf = GRinf, h = h_GR, fit_type = fit_GR, flat_fit = flat_GR) %>% 
+      dplyr::rename(EC50 = GEC50, Einf = GRinf, h = h_GR, fit_type = fit_GR, flat_fit = flat_fit_GR) %>% 
       dplyr::as_tibble() %>% dplyr::mutate(c = list(concentration))
   }
-  # Get data frames for curves to give to ggplot
-  curve_data_all = pmap_dfr(.l = curve_input_list, .f = .create_curve_data)
-
-  # len = (log10(max) - log10(min))*100
-  # Concentration = 10^(seq(log10(min) - 1, log10(max) + 1,
-  #                         length.out = len))
-  # curve_data_all = NULL
-  # exps = unique(parameterTable$experiment)
-  # for(exp in exps) {
-  #   row = which(parameterTable$experiment == exp)
-  #   if(metric == "GR") {
-  #     GEC50 = parameterTable$GEC50[row]
-  #     GRinf = parameterTable$GRinf[row]
-  #     h_GR = parameterTable$h_GR[row]
-  #     logistic_3u = function(c){GRinf + (1 - GRinf)/(1 + (c/GEC50)^h_GR)}
-  #   } else if (metric %in% c("rel_cell", "IC")) {
-  #     EC50 = parameterTable$EC50[row]
-  #     Einf = parameterTable$Einf[row]
-  #     h = parameterTable$h[row]
-  #     logistic_3u = function(c){Einf + (1 - Einf)/(1 + (c/EC50)^h)}
-  #   }
-  #   curve_data = as.matrix(concentration)
-  #   colnames(curve_data) = "Concentration"
-  #   if(metric == "GR") {
-  #     if(parameterTable$fit_GR[row] == "sigmoid") {
-  #       GR = apply(curve_data, 1, logistic_3u)
-  #     } else {
-  #       GR = parameterTable$flat_fit_GR[row]
-  #     }
-  #     curve_data = cbind(curve_data, GR)
-  #   } else if(metric %in% c("rel_cell", "IC")) {
-  #     if(parameterTable$fit_rel_cell[row] == "sigmoid") {
-  #       rel_cell_count = apply(curve_data, 1, logistic_3u)
-  #     } else {
-  #       rel_cell_count = parameterTable$flat_fit_rel_cell[row]
-  #     }
-  #     curve_data = cbind(curve_data, rel_cell_count)
-  #   }
-  #   curve_data = as.data.frame(curve_data)
-  #   curve_data$experiment = exp
-  #   if(is.null(curve_data_all)){
-  #     curve_data_all = curve_data
-  #   } else {
-  #     curve_data_all = rbind(curve_data_all, curve_data)
-  #   }
-  # }
-  # curve_data_all = merge(curve_data_all, parameterTable[, c(groupingVariables, "experiment")])
-  # curve_data_all$experiment = as.factor(curve_data_all$experiment)
-
-  data$GRvalue = signif(data$GRvalue, 3)
-  data$log10_concentration = signif(data$log10_concentration, 3)
-  #data_mean = data %>% group_by(experiment, log10_concentration, concentration) %>% 
+  # data frame for curves to give to ggplot
+  curve_data_all = suppressWarnings(pmap_dfr(.l = curve_input_list, .f = .create_curve_data))
+  # data frame for (all) points
+  if(metric == "GR") {
+    data %<>% select_at(c(group_vars, "concentration", "log10_concentration", 
+                                   "GRvalue", "experiment")) %>%
+      rename(y_val = GRvalue)
+  } else if(metric == "rel_cell") {
+    data %<>% select_at(c(group_vars, "concentration", "log10_concentration", 
+                                     "rel_cell_count", "experiment")) %>%
+      rename(y_val = rel_cell_count)
+  }
+  # data frame for (average) points
   data_mean = data %>% dplyr::group_by_at(c(group_vars, "experiment", 
-                  "concentration", "log10_concentration")) %>%
-    dplyr::summarise(GRvalue_mean = mean(GRvalue, na.rm = TRUE), 
-                     GRvalue_sd = sd(GRvalue, na.rm = TRUE)) %>%
+                                            "concentration", "log10_concentration")) %>%
+    dplyr::summarise(y_val_mean = mean(y_val, na.rm = TRUE), 
+                     y_val_sd = sd(y_val, na.rm = TRUE),
+                     ynum = length(y_val)) %>%
     dplyr::ungroup() %>%
-    dplyr::mutate(experiment = as.character(experiment))
-  ####### testing
-  #data$GRvalue_mean = 
-  #######
-  data_mean %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3))
-  parameterTable %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3))
-  curve_data_all %<>% dplyr::mutate(log10_concentration = log10(concentration)) %>%
-    dplyr::mutate_if(is.numeric, function(x) signif(x,3))
+    dplyr::mutate(y_val_se = y_val_sd/sqrt(ynum))
+
+  # round to 3 significant digits
+  data %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # points (all)
+  data_mean %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # points (average)
+  parameterTable %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # rugs
+  curve_data_all %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # curves
+  
   # initialize plot
   p = ggplot2::ggplot()
+  # add curves to the plot
+  if(curves == "line") {
+    p = p + ggplot2::geom_line(data = data_mean, ggplot2::aes(x = log10_concentration,
+          y = y_val_mean, colour = experiment), size = 1.1)
+          #### scale transformations don't work with plotly :(
+          # scale_x_continuous(labels = trans_format("identity", math_format(10^.x)),limits = c(-3.5, 1.5)) +
+          # annotation_logticks(sides = "b", short = unit(0.1, "cm"), mid = unit(0.2, "cm"),long = unit(0.3, "cm"))
+  } else if(curves == "fit") {
+    p = p + ggplot2::geom_line(data = curve_data_all,
+          ggplot2::aes(x = log10_concentration, y = y_val, colour = experiment), size = 1.1)
+  } else if(curves == "none") {
+    # do nothing
+  }
+  # add points to the plot
+  if(points == "average") {
+    p = p + ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
+      y = y_val_mean, colour = experiment), size = 2)
+  } else if(points == "all") {
+    p = p + ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
+          y = y_val, colour = experiment), size = 2)
+  } else if(points == "none") {
+    # do nothing
+  }
+  # add error bars to the plot
+  bar_width = 0.2
+  if(bars == "sd") {
+    p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, 
+              ymin = y_val_mean - y_val_sd, ymax = y_val_mean + y_val_sd, 
+              colour = experiment), width = bar_width)
+  } else if(bars == "se") {
+    p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, 
+               ymin = y_val_mean - y_val_se, ymax = y_val_mean + y_val_se, 
+               colour = experiment), width = bar_width)
+  }
+  p = p + ggplot2::xlab('Concentration (log10 scale)')
   if(metric == "GR") {
-    # add curves to the plot
-    if(curves == "line") {
-      p = p + ggplot2::geom_line(data = data_mean, ggplot2::aes(x = log10_concentration,
-            y = GRvalue_mean, colour = experiment), size = 1.1)
-            #### scale transformations don't work with plotly :(
-            # scale_x_continuous(
-            #               labels = trans_format("identity", math_format(10^.x)),
-            #               limits = c(-3.5, 1.5)
-            #) + annotation_logticks(sides = "b", short = unit(0.1, "cm"), mid = unit(0.2, "cm"),
-            #             long = unit(0.3, "cm"))
-            # ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration,ymin = GRvalue_mean - GRvalue_sd,
-            #   ymax = GRvalue_mean + GRvalue_sd, colour = experiment), width = 0.5)
-    } else if(curves == "fit") {
-      p = p + ggplot2::geom_line(data = curve_data_all,
-            ggplot2::aes(x = log10_concentration, y = GR, colour = experiment), size = 1.1)
-    } else if(curves == "none") {
-      # do nothing
-    }
-    # add points to the plot
-    if(points == "average") {
-      p = p + ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
-        y = GRvalue_mean, colour = experiment), size = 2)
-    } else if(points == "all") {
-      p = p + ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
-            y = GRvalue, colour = experiment), size = 2)
-    } else if(points == "none") {
-      # do nothing
-    }
     # set x and y range for plot, set labels, add horizontal lines
     p = p + ggplot2::coord_cartesian(xlim = c(log10(min)-0.1,
                                               log10(max)+0.1),
                                      ylim = c(-1, 1.5), expand = F) +
       ggplot2::ggtitle("Concentration vs. GR values") +
-      ggplot2::xlab('Concentration (log10 scale)') +
       ggplot2::ylab('GR value') +
+      ggplot2::geom_hline(yintercept = 0, size = 1, colour = "#1F77B4")
       #ggplot2::geom_hline(yintercept = 1, size = 1, linetype = "dashed") +
       #ggplot2::geom_hline(yintercept = 0.5, size = 1, linetype = "dashed") +
       #ggplot2::geom_hline(yintercept = -1, size = 1, linetype = "dashed")
-      ggplot2::geom_hline(yintercept = 0, size = 1, colour = "#1F77B4")
-  } else if(metric %in% c("rel_cell", "IC")) {
-    if(points == TRUE & curves == FALSE) {
-      p = ggplot2::ggplot(data = data, ggplot2::aes(x = log10_concentration,
-          y = rel_cell_count, colour = experiment)) + ggplot2::geom_point()
-    } else if(points == FALSE & curves == TRUE) {
-      p = ggplot2::ggplot(data = curve_data_all,
-                          ggplot2::aes(x = log10(concentration),
-          y = rel_cell_count, colour = experiment)) + ggplot2::geom_line()
-    } else if(points == TRUE & curves == TRUE) {
-      p = ggplot2::ggplot() + ggplot2::geom_line(data = curve_data_all,
-        ggplot2::aes(x = log10_concentration, y = rel_cell_count,
-                     colour = experiment)) +
-        ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
-                            y = rel_cell_count, colour = experiment))
-    }
+  } else if(metric == "rel_cell") {
+    # set x and y range for plot, set labels, add horizontal lines
     p = p + ggplot2::coord_cartesian(xlim = c(log10(min)-0.1,
                                               log10(max)+0.1),
-                                     ylim = c(0, 1.5), expand = TRUE) +
+                                     ylim = c(0, 1.5), expand = F) +
       ggplot2::ggtitle("Concentration vs. Relative cell count") +
-      ggplot2::xlab('Concentration (log10 scale)') +
-      ggplot2::ylab('Relative cell count') + ggplot2::labs(colour = "") +
-      ggplot2::geom_hline(yintercept = 1, size = .25) +
-      ggplot2::geom_hline(yintercept = 0.5, size = .25) +
-      ggplot2::geom_hline(yintercept = 0, size = .25)
+      ggplot2::ylab('Relative cell count')
   }
-  ### Change code above so that curve parameters are called the same thing
+  ###  - Change code above so that curve parameters are called the same thing
   ### for GR and traditional curve. Then change rug names below to agree with this.
-  ### Maybe make an option for marginal plots of GR metrics instead of rugs.
-  ### Check how to change color scheme so that colors get used more than once
+  ### - Maybe make an option for marginal plots of GR metrics instead of rugs.
+  ### - Check how to change color scheme so that colors get used more than once
   ### instead of running out of colors
   
   # add rugs to plot
