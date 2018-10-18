@@ -49,7 +49,7 @@
 #' groupingVariables = c('cell_line','agent'))
 #' GRdrawDRC(drc_output, experiments = c('BT20 drugA', 'MCF10A drugA',
 #' 'MCF7 drugA'), min = 10^(-4), max = 10^2)
-#' GRdrawDRC(drc_output, plotly = FALSE)
+#' GRdrawDRC(drc_output)
 #' @export
 
 
@@ -152,16 +152,16 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
       dplyr::as_tibble() %>% dplyr::mutate(c = list(concentration))
   }
   # data frame for curves to give to ggplot
-  curve_data_all = suppressWarnings(pmap_dfr(.l = curve_input_list, .f = .create_curve_data))
+  curve_data_all = suppressWarnings(purrr::pmap_dfr(.l = curve_input_list, .f = .create_curve_data))
   # data frame for (all) points
   if(metric == "GR") {
-    data %<>% select_at(c(group_vars, "concentration", "log10_concentration", 
+    data %<>% dplyr::select_at(c(group_vars, "concentration", "log10_concentration", 
                                    "GRvalue", "experiment")) %>%
-      rename(y_val = GRvalue)
+      dplyr::rename(y_val = GRvalue)
   } else if(metric == "rel_cell") {
-    data %<>% select_at(c(group_vars, "concentration", "log10_concentration", 
+    data %<>% dplyr::select_at(c(group_vars, "concentration", "log10_concentration", 
                                      "rel_cell_count", "experiment")) %>%
-      rename(y_val = rel_cell_count)
+      dplyr::rename(y_val = rel_cell_count)
   }
   # data frame for (average) points
   data_mean = data %>% dplyr::group_by_at(c(group_vars, "experiment", 

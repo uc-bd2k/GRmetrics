@@ -111,6 +111,58 @@
       controls$noMessage = TRUE
       controls$rmNA = TRUE
       # GR curve fitting
+      # biphasic model fitting
+      # curve 1: a = Einf, b = EC50, c = h
+      # curve 2: d = Einf, e = EC50, f = h
+      #===== constrained fit biphasic curve ============
+      ge50_low = max(c(min(c) * 1e-4, 1e-7))
+      ge50_high = min(c(max(c) * 1e2, 1e2))
+      priors_bi = c(.1, -log10(median(c)), 2,
+                    -0.1, -log10(1), 2)
+      lower_bi = c(-.05, -log10(1), .025,
+                   -1, -log10(ge50_high), 0.025)
+      upper_bi = c(1, -log10(ge50_low), 5,
+                   .5, -log10(0.3), 10)
+      extrapolrange = 10
+      cmin = log10(min(c)/extrapolrange)
+      cmax = log10(max(c) * extrapolrange)
+      xc = 10^(seq(cmin, cmax, 0.05))
+      # priors = [.1, -np.log10(np.median(xdata)), 2,
+      #           -0.1, -np.log10(1), 2]
+      # ge50_low = np.max((np.min(xdata) * 1e-4, 1e-7))
+      # ge50_high = np.min((np.max(xdata) * 1e2, 1e2))
+      # lower_bounds = [-.05, -np.log10(1), .025,
+      #                 -1, -np.log10(ge50_high), 0.025]
+      # upper_bounds = [1, -np.log10(ge50_low), 5,
+      #                 .5, -np.log10(0.3), 10]
+      # cmin = np.log10(np.min(xdata)/extrapolrange)
+      # cmax = np.log10(np.max(xdata) * extrapolrange)
+      # xc = 10 ** (np.arange(cmin, cmax, 0.05))
+      # biphasic fit
+      # opfct_bi = function(x, a, b, c, d, e, f) {
+      #   term1 = 1 + (a + (1 - a)/(1 + (x * (10^b)) ^ c))
+      #   term2 = 1 + (d + (1 - d)/(1 + (x * (10^e)) ^ f))
+      #   2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
+      # }
+      opfct_bi = function(x, p) {
+        term1 = 1 + (p[1] + (1 - p[1])/(1 + (x * (10^p[2])) ^ p[3]))
+        term2 = 1 + (p[4] + (1 - p[4])/(1 + (x * (10^p[5])) ^ p[6]))
+        2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
+      }
+      yexp_bi = data_exp$GRvalue
+      # min_func = function(x, y, a, b, c, d, e, f) {sum((y - opfct_bi(x, a, b, c, d, e, f))^2)}
+      min_func = function(x, y, p) {sum((y - opfct_bi(x, p))^2)}
+      # python:
+      # term1 = 1 + (a + (1 - a)/(1 + (x * (10 ** b)) ** c))
+      # term2 = 1 + (d + (1 - d)/(1 + (x * (10 ** e)) ** f))
+      # biphasic_function = 2 ** (0.5 * (np.log2(term1) + np.log2(term2))) - 1
+      nlsObj <- try(optim(par = priors_bi, function(p, x, y) min_func(x = data_exp$concentration, y = yexp_bi, p),
+                  hessian = TRUE, method = "L-BFGS-B", 
+                  lower = lower_bi, upper = upper_bi))
+      nlsObj <- try(nls(formula = yexp_bi ~ opfct_bi(x = data_exp$concentration, p), data = data_exp, start = priors_bi,
+                         lower = lower_bi, upper = upper_bi, 
+                         control = controls))
+      # logistic model fitting
       output_model_new = try(drc::drm(
         GRvalue~log10_concentration, experiment, data=data_exp, logDose = 10,
         fct=drc::LL.3u(names=c('h_GR','GRinf','GEC50')), start = priors,
