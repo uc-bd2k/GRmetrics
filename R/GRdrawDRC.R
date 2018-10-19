@@ -151,8 +151,11 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
       dplyr::rename(EC50 = GEC50, Einf = GRinf, h = h_GR, fit_type = fit_GR, flat_fit = flat_fit_GR) %>% 
       dplyr::as_tibble() %>% dplyr::mutate(c = list(concentration))
   }
+  # make data frame for mapping "experiment" to grouping variables
+  data_for_join = data %>% dplyr::select_at(c("experiment", group_vars))
   # data frame for curves to give to ggplot
-  curve_data_all = suppressWarnings(purrr::pmap_dfr(.l = curve_input_list, .f = .create_curve_data))
+  curve_data_all = suppressWarnings(purrr::pmap_dfr(.l = curve_input_list, .f = .create_curve_data)) %>%
+    dplyr::left_join(data_for_join, by = "experiment")
   # data frame for (all) points
   if(metric == "GR") {
     data %<>% dplyr::select_at(c(group_vars, "concentration", "log10_concentration", 
@@ -269,7 +272,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   if(facet_row != "none" | facet_col != "none") {
     if(facet_row == "none") facet_row = "."
     if(facet_col == "none") facet_col = "."
-    p = p + ggplot2::facet_grid(stats::reformulate(facet_col,facet_row))
+    p = p + lemon::facet_rep_grid(stats::reformulate(facet_col,facet_row))
   }
   # return ggplot or plotly object
   if(plot_type == "interactive") {

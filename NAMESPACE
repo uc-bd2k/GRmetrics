@@ -11,6 +11,7 @@ export(GRscatter)
 
 import(ggplot2)
 import(ggsci)
+import(lemon)
 importFrom(plotly, plotly_build)
 importFrom(plotly, ggplotly)
 import(drc)

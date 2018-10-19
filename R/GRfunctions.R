@@ -159,9 +159,6 @@
       nlsObj <- try(optim(par = priors_bi, function(p, x, y) min_func(x = data_exp$concentration, y = yexp_bi, p),
                   hessian = TRUE, method = "L-BFGS-B", 
                   lower = lower_bi, upper = upper_bi))
-      nlsObj <- try(nls(formula = yexp_bi ~ opfct_bi(x = data_exp$concentration, p), data = data_exp, start = priors_bi,
-                         lower = lower_bi, upper = upper_bi, 
-                         control = controls))
       # logistic model fitting
       output_model_new = try(drc::drm(
         GRvalue~log10_concentration, experiment, data=data_exp, logDose = 10,
