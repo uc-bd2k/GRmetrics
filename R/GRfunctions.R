@@ -96,6 +96,7 @@
     # calculate avg number of cell doublings in control and treated experiments
     ctrl_cell_doublings[i] = mean(data_exp$ctrl_cell_doublings, na.rm = TRUE)
     #===== constrained fit GR curve ============
+    #### h, Einf, EC50
     c = unique(data_exp$concentration)
     priors = c(2, 0.1, stats::median(c))
     lower = c(.1, -1, min(c)*1e-2)
@@ -112,53 +113,68 @@
       controls$rmNA = TRUE
       # GR curve fitting
       # biphasic model fitting
-      # curve 1: a = Einf, b = EC50, c = h
-      # curve 2: d = Einf, e = EC50, f = h
+      # curve 1: a = Einf, b = log10_EC50, c = h
+      # curve 2: d = Einf, e = log10_EC50, f = h
       #===== constrained fit biphasic curve ============
-      ge50_low = max(c(min(c) * 1e-4, 1e-7))
-      ge50_high = min(c(max(c) * 1e2, 1e2))
-      priors_bi = c(.1, -log10(median(c)), 2,
-                    -0.1, -log10(1), 2)
-      lower_bi = c(-.05, -log10(1), .025,
-                   -1, -log10(ge50_high), 0.025)
-      upper_bi = c(1, -log10(ge50_low), 5,
-                   .5, -log10(0.3), 10)
+      ec50_low = log10(max(c(min(c) * 1e-4, 1e-7)))
+      ec50_high = log10(min(c(max(c) * 1e2, 1e2)))
+      cc = log10(c)
+      p_bi = tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,             ~upper,
+        "Einf_1",                     -.05,        0.1,                  1, 
+        "log10_GEC50_1",          ec50_low, median(cc),           log10(1),
+        "h_1",                       0.025,          2,                  5,
+        "Einf_2",                       -1,       -0.1,                0.5, 
+        "log10_GEC50_2",        log10(0.3),   log10(1),          ec50_high,
+        "h_2",                       0.025,          2,                  5
+      )
       extrapolrange = 10
       cmin = log10(min(c)/extrapolrange)
       cmax = log10(max(c) * extrapolrange)
       xc = 10^(seq(cmin, cmax, 0.05))
-      # priors = [.1, -np.log10(np.median(xdata)), 2,
-      #           -0.1, -np.log10(1), 2]
-      # ge50_low = np.max((np.min(xdata) * 1e-4, 1e-7))
-      # ge50_high = np.min((np.max(xdata) * 1e2, 1e2))
-      # lower_bounds = [-.05, -np.log10(1), .025,
-      #                 -1, -np.log10(ge50_high), 0.025]
-      # upper_bounds = [1, -np.log10(ge50_low), 5,
-      #                 .5, -np.log10(0.3), 10]
-      # cmin = np.log10(np.min(xdata)/extrapolrange)
-      # cmax = np.log10(np.max(xdata) * extrapolrange)
-      # xc = 10 ** (np.arange(cmin, cmax, 0.05))
-      # biphasic fit
-      # opfct_bi = function(x, a, b, c, d, e, f) {
-      #   term1 = 1 + (a + (1 - a)/(1 + (x * (10^b)) ^ c))
-      #   term2 = 1 + (d + (1 - d)/(1 + (x * (10^e)) ^ f))
-      #   2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
-      # }
+      ## Define the biphasic dose-response function
+      ## x is concentration, p is the parameter vector
       opfct_bi = function(x, p) {
-        term1 = 1 + (p[1] + (1 - p[1])/(1 + (x * (10^p[2])) ^ p[3]))
-        term2 = 1 + (p[4] + (1 - p[4])/(1 + (x * (10^p[5])) ^ p[6]))
+        term1 = 1 + (p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3]))
+        term2 = 1 + (p[4] + (1 - p[4])/(1 + (x / (10^p[5])) ^ p[6]))
         2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
       }
+      ## Define the sigmoidal (or logistic) dose-response function
+      opfct_sig = function(x, p) {
+        p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
+      }
       yexp_bi = data_exp$GRvalue
-      # min_func = function(x, y, a, b, c, d, e, f) {sum((y - opfct_bi(x, a, b, c, d, e, f))^2)}
-      min_func = function(x, y, p) {sum((y - opfct_bi(x, p))^2)}
-      # python:
-      # term1 = 1 + (a + (1 - a)/(1 + (x * (10 ** b)) ** c))
-      # term2 = 1 + (d + (1 - d)/(1 + (x * (10 ** e)) ** f))
-      # biphasic_function = 2 ** (0.5 * (np.log2(term1) + np.log2(term2))) - 1
-      nlsObj <- try(optim(par = priors_bi, function(p, x, y) min_func(x = data_exp$concentration, y = yexp_bi, p),
-                  hessian = TRUE, method = "L-BFGS-B", 
-                  lower = lower_bi, upper = upper_bi))
+      ## Define the residual sum of squares function
+      sum_square_bi = function(x, y, p) {sum((y - opfct_bi(x, p))^2)}
+      sum_square_sig = function(x, y, p) {sum((y - opfct_sig(x, p))^2)}
+      ## Find optimal parameters to fit biphasic dose-response curve
+      bi_controls = list(maxit = 500)
+      bi_fit = try(optim(par = p_bi$prior, 
+                  function(p, x, y) sum_square_bi(x = data_exp$concentration, y = yexp_bi, p),
+                  hessian = TRUE, method = "L-BFGS-B", control = bi_controls,
+                  lower = p_bi$lower, upper = p_bi$upper))
+      sig_fit_low = try(optim(par = p_bi$prior[1:3], 
+                  function(p, x, y) sum_square_sig(x = data_exp$concentration, y = yexp_bi, p),
+                  hessian = TRUE, method = "L-BFGS-B", control = bi_controls,
+                  lower = p_bi$lower[1:3], upper = p_bi$upper[1:3]))
+      sig_fit_high = try(optim(par = p_bi$prior[4:6], 
+                  function(p, x, y) sum_square_sig(x = data_exp$concentration, y = yexp_bi, p),
+                  hessian = TRUE, method = "L-BFGS-B", control = bi_controls,
+                  lower = p_bi$lower[4:6], upper = p_bi$upper[4:6]))
+      # nls_sig <- try(optim(par = priors[c(2, 3, 1)], 
+      #             function(p, x, y) min_func_sig(x = data_exp$concentration, y = yexp_bi, p),
+      #             hessian = TRUE, method = "L-BFGS-B", 
+      #             lower = lower[c(2, 3, 1)], upper = upper[c(2, 3, 1)]))
+      if(class(bi_fit) != "try-error") {
+        Npara = 6
+        ## Get sum of squares for biphasic fit
+        RSS = bi_fit$value
+        #sst = np.sum([(yt - np.mean(ytrue))**2  for yt in ytrue])
+        #sse = get_sse(ypred, ytrue)
+        #rsquare = 1 - (sse/sst)
+        ## Get fitted parameters for biphasic function
+        bi_fit_params = bi_fit$par %>% magrittr::set_names(p_bi$parameter)
+      }
       # logistic model fitting
       output_model_new = try(drc::drm(
         GRvalue~log10_concentration, experiment, data=data_exp, logDose = 10,
