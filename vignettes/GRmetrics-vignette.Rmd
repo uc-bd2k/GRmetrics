@@ -46,8 +46,8 @@ data with these new metrics across multiple conditions and cell lines.
 The **GRmetrics** package can be installed through Bioconductor
 
 ```r
-source("http://bioconductor.org/biocLite.R")
-biocLite("GRmetrics")
+install.packages("BiocManager")
+BiocManager::install("GRmetrics")
 ```
 
 #References:
@@ -58,7 +58,7 @@ Nature Methods 13.6 (2016): 521-527.
 
 Corresponding MATLAB and Python scripts available on repo:
 
-https://github.com/sorgerlab/gr50_tools.
+https://github.com/datarail/gr_metrics.
 
 Note: Most, but not all of these scripts have been reproduced in this R 
 package. Namely, this package does not contain code for "Case B" of the 
