@@ -32,7 +32,7 @@
   } else {
     input_edited$experiment = as.factor("All Data")
   }
-  return(input_edited)
+  return(as.data.frame(input_edited))
 }
 
 .GRlogisticFit = function(inputData, groupingVariables, force = FALSE,
@@ -357,7 +357,8 @@
   if(!is.null(metadata)) {
     parameters = cbind(metadata, parameters)
   }
-  return(list(parameters = parameters, GR_drc_list = GR_drc_list, trad_drc_list = trad_drc_list))
+  return(list(parameters = as.data.frame(parameters), 
+              GR_drc_list = GR_drc_list, trad_drc_list = trad_drc_list))
 }
 
 .GRlogistic_3u = function(c, GRinf, GEC50, h_GR){

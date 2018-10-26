@@ -82,6 +82,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   yrug = yrug[1]
   theme = theme[1]
   palette = palette[1]
+  plot_type = plot_type[1]
   # get grouping variables
   group_vars = GRgetGroupVars(fitData)
   # assertthat::assert_that(palette %in% c("default","npg", "aaas"), 

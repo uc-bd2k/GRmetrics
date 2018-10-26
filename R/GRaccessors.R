@@ -102,7 +102,7 @@ GRgetMetrics <- function(fitData) {
 #' @export
 
 GRgetGroupVars <- function(fitData) {
-  return(metadata(fitData)[[2]])
+  return(S4Vectors::metadata(fitData)[[2]])
 }
 
 #' GR metrics definitions
