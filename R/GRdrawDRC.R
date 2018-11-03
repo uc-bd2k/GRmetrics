@@ -62,17 +62,16 @@
 #   how to make log-ticks from geom_segment only (should work with plotly) ( long-term )
 GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all",
                       min = "auto", max = "auto",
+                      color = "experiment",
                       points = c("average", "all", "none"),
-                      curves = c("fit", "line", "none"),
+                      curves = c("sigmoid", "line", "biphasic", "none"),
                       bars = c("none", "sd", "se"),
                       xrug = c("none", "GR50", "GEC50", "IC50", "EC50"),
                       yrug = c("none", "GRinf", "GRmax", "Einf", "Emax"),
                       theme = c("classic", "minimal", "bw"),
                       palette = c("default","npg", "aaas"),
-                      facet_row = "none",
-                      facet_col = "none",
+                      facet = "none",
                       plot_type = c("static", "interactive")) {
-  
   # make all inputs length 1
   metric = metric[1]
   points = points[1]
@@ -84,12 +83,19 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   palette = palette[1]
   plot_type = plot_type[1]
   # get grouping variables
-  group_vars = GRgetGroupVars(fitData)
+  group_vars = GRmetrics::GRgetGroupVars(fitData)
   # assertthat::assert_that(palette %in% c("default","npg", "aaas"), 
   #                         msg = "palette must be one of the following: 'default', 'npg', 'aaas'")
   # check that metric is allowed
   assertthat::assert_that(is.character(metric))
   assertthat::assert_that(metric %in% c("GR", "rel_cell"))
+  # check that curve parameter is allowed
+  assertthat::assert_that(is.character(curve))
+  assertthat::assert_that(curve %in% c("sigmoid", "line", "biphasic", "none"))
+  # check that color variable is allowed
+  assertthat::assert_that(color %in% c("experiment", group_vars), 
+                          msg = "'color' must be either 'experiment' or one of the grouping variables")
+  color = dplyr::ensym(color)
   # check that xrug and yrug are allowed
   xrug_options = c("none", "GR50", "GEC50", "IC50", "EC50")
   assertthat::assert_that(is.character(xrug))
@@ -112,15 +118,15 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   assertthat::assert_that(!(metric == "rel_cell" && yrug %in% c("GRinf", "GRmax")),
                           msg = 'For metric "rel_cell", yrug must be "Einf" or "Emax"')
   # check that facets are allowed
-  assertthat::assert_that(facet_row %in% c("none", group_vars))
-  assertthat::assert_that(facet_col %in% c("none", group_vars))
-  assertthat::assert_that(facet_col != facet_row | (facet_col == "none" && facet_row == "none"),
-                          msg = "facet_col and facet_row must be different")
+  #assertthat::assert_that(length(facet) == 1)
+  assertthat::assert_that(all(facet %in% group_vars) | identical(facet, "none"),
+                          msg = 'facet must be either "none" or a subset of the grouping variables')
+  facet = dplyr::syms(facet)
   assertthat::assert_that(metric != "IC", msg = 'For the traditional dose-response curve based on relative cell counts, please use metric = "rel_cell" instead of metric = "IC". This notation has been changed as of Version 1.3.2.')
   # data frame for points
   data = S4Vectors::metadata(fitData)[[1]]
   # data frame for metrics, to make curves and rugs
-  parameterTable = GRgetMetrics(fitData) %>% as_tibble()
+  parameterTable = GRmetrics::GRgetMetrics(fitData) %>% dplyr::as_tibble()
   if(length(group_vars) == 0) data$experiment = "All Data"
   # change experiment to character from factor if necessary
   data$experiment = as.character(data$experiment) 
@@ -132,14 +138,22 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   if(min == "auto") min = min(data$concentration, na.rm = TRUE)
   if(max == "auto") max = max(data$concentration, na.rm = TRUE)
   # define x support for curve
-  len = (log10(max) - log10(min))*100
+  len = (log10(max) - log10(min))*20
   concentration = 10^(seq(log10(min) - 1, log10(max) + 1, length.out = len))
-  # define function for curve mapping
+  # define function for sigmoid curve mapping
   .create_curve_data = function(EC50, Einf, h, fit_type, flat_fit, experiment, c) {
     df = data.frame(experiment = experiment, concentration = c, log10_concentration = log10(c))
     if(fit_type == "sigmoid") df$y_val = Einf + (1 - Einf)/(1 + (c/EC50)^h)
     if(fit_type == "flat") df$y_val = flat_fit
-    #if(fit_type == "biphasic") df$y_val = NA ### make df for biphasic fit
+    return(df)
+  }
+  # define function for biphasic sigmoid curve mapping
+  .create_biphasic_data = function(EC50_1, Einf_1, h_1, EC50_2, Einf_2, h_2, 
+                                   experiment, c) {
+    df = data.frame(experiment = experiment, concentration = c, log10_concentration = log10(c))
+    term1 = 1 + (EC50_1 + (1 - EC50_1)/(1 + (x / (10^Einf_1)) ^ h_1))
+    term2 = 1 + (EC50_2 + (1 - EC50_2)/(1 + (x / (10^Einf_2)) ^ h_2))
+    df$y_val = 2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
     return(df)
   }
   # make list (tibble) of inputs for curve
@@ -157,6 +171,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   # data frame for curves to give to ggplot
   curve_data_all = suppressWarnings(purrr::pmap_dfr(.l = curve_input_list, .f = .create_curve_data)) %>%
     dplyr::left_join(data_for_join, by = "experiment")
+  
   # data frame for (all) points
   if(metric == "GR") {
     data %<>% dplyr::select_at(c(group_vars, "concentration", "log10_concentration", 
@@ -187,23 +202,25 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   # add curves to the plot
   if(curves == "line") {
     p = p + ggplot2::geom_line(data = data_mean, ggplot2::aes(x = log10_concentration,
-          y = y_val_mean, colour = experiment), size = 1.1)
+          y = y_val_mean, colour = !!color, group = experiment), size = 1.1)
+    # p + ggplot2::geom_line(data = data_mean, ggplot2::aes_string(x = "log10_concentration",
+    #       y = "y_val_mean", colour = color, group = "experiment"), size = 1.1)
           #### scale transformations don't work with plotly :(
           # scale_x_continuous(labels = trans_format("identity", math_format(10^.x)),limits = c(-3.5, 1.5)) +
           # annotation_logticks(sides = "b", short = unit(0.1, "cm"), mid = unit(0.2, "cm"),long = unit(0.3, "cm"))
-  } else if(curves == "fit") {
+  } else if(curves %in% c("sigmoid", "biphasic")) {
     p = p + ggplot2::geom_line(data = curve_data_all,
-          ggplot2::aes(x = log10_concentration, y = y_val, colour = experiment), size = 1.1)
+          ggplot2::aes(x = log10_concentration, y = y_val, colour = !!color, group = experiment), size = 1.1)
   } else if(curves == "none") {
     # do nothing
   }
   # add points to the plot
   if(points == "average") {
     p = p + ggplot2::geom_point(data = data_mean, ggplot2::aes(x = log10_concentration,
-      y = y_val_mean, colour = experiment), size = 2)
+      y = y_val_mean, colour = !!color, group = experiment), size = 2)
   } else if(points == "all") {
     p = p + ggplot2::geom_point(data = data, ggplot2::aes(x = log10_concentration,
-          y = y_val, colour = experiment), size = 2)
+          y = y_val, colour = !!color, group = experiment), size = 2)
   } else if(points == "none") {
     # do nothing
   }
@@ -212,11 +229,11 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   if(bars == "sd") {
     p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, 
               ymin = y_val_mean - y_val_sd, ymax = y_val_mean + y_val_sd, 
-              colour = experiment), width = bar_width)
+              colour = !!color, group = experiment), width = bar_width)
   } else if(bars == "se") {
     p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, 
                ymin = y_val_mean - y_val_se, ymax = y_val_mean + y_val_se, 
-               colour = experiment), width = bar_width)
+               colour = !!color, group = experiment), width = bar_width)
   }
   p = p + ggplot2::xlab('Concentration (log10 scale)')
   if(metric == "GR") {
@@ -265,26 +282,16 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   #                         y = yrug, yend = yrug,
   #                         colour = "experiment"), size = rug_size)
   # }
-  # add theme to plot
-  p = p + ggplot2::theme_classic() #+ do.call(theme, args = list())
+
+  # configure plot facets
+  if(!identical(facet, "none")) {
+    p = p + lemon::facet_rep_wrap(facet, ncol = 5)
+  }
+  # add theme to plot, keep aspect ratio 1:1
+  p = p + ggplot2::theme_classic()#+ do.call(theme, args = list())
   # add palette to plot
   ###p = p + scale_colour_npg()
-  # configure plot facets
-  if(facet_row != "none" | facet_col != "none") {
-    if(facet_row == "none") facet_row = "."
-    if(facet_col == "none") facet_col = "."
-    p = p + lemon::facet_rep_grid(stats::reformulate(facet_col,facet_row))
-  }
   # return ggplot or plotly object
-  if(plot_type == "interactive") {
-    if(facet_row != ".") {
-      # give extra x-axis space so that the legend doesn't overlap labels
-      q = plotly::ggplotly(p) %>% plotly::layout(legend = list(x = 1.05))
-    } else {
-      q = plotly::ggplotly(p)
-    }
-    return(q)
-  } else {
-    return(p)
-  }
+  if(plot_type == "interactive") return(plotly::ggplotly(p))
+  if(plot_type == "static") return(p + ggplot2::theme(aspect.ratio = 1))
 }

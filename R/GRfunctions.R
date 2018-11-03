@@ -40,23 +40,27 @@
   # declaring values NULL to avoid note on package check
   #experiment = NULL
   # GR curve parameters
-  GEC50 = NULL
-  GRinf = NULL
-  h_GR = NULL
+  # GEC50 = NULL
+  # GRinf = NULL
+  # h_GR = NULL
   # Relative cell count curve parameters
-  EC50 = NULL
-  Einf = NULL
-  h = NULL
+  # EC50 = NULL
+  # Einf = NULL
+  # h = NULL
   experiments = levels(inputData$experiment)
   
-  parameters = matrix(data = NA, ncol = 3, nrow = length(experiments))
-  parameters = as.data.frame(parameters)
+  params_GR = matrix(data = NA, ncol = 3, nrow = length(experiments))
+  params_GR = as.data.frame(params_GR)
   
-  parameters2 = matrix(data = NA, ncol = 3, nrow = length(experiments))
-  parameters2 = as.data.frame(parameters)
+  params_trad = matrix(data = NA, ncol = 3, nrow = length(experiments))
+  params_trad = as.data.frame(params_trad)
   
-  colnames(parameters) = c('h_GR','GRinf','GEC50')
-  colnames(parameters2) = c('h', 'Einf', 'EC50')
+  params_bi = matrix(data = NA, ncol = 6, nrow = length(experiments))
+  params_bi = as.data.frame(params_bi)
+  
+  colnames(params_bi) = c("Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2")
+  colnames(params_GR) = c('h_GR','GRinf','GEC50')
+  colnames(params_trad) = c('h', 'Einf', 'EC50')
   if(length(groupingVariables) > 0) {
     metadata = matrix(data = NA, ncol = length(groupingVariables),
                       nrow = length(experiments))
@@ -84,13 +88,35 @@
   ctrl_cell_doublings = NULL
   GR_drc_list = list()
   trad_drc_list = list()
+  # drc fitting controls
+  controls = drc::drmc()
+  controls$relTol = 1e-06
+  controls$errorm = FALSE
+  controls$noMessage = TRUE
+  controls$rmNA = TRUE
+  
+  ##### re-writing loop with dplyr, groupby, and lapply ######
+  data_grp = inputData %>% group_by(experiment)
+  data_grp_summ = data_grp %>% summarise(GR_mean = mean(GRvalue, na.rm = TRUE),
+                                         rel_cell_mean = mean(rel_cell_count, na.rm = TRUE),
+                                         ctrl_cell_doublings = mean(ctrl_cell_doublings, na.rm = TRUE),
+                                         conc = list(unique(concentration)),
+                                         ## constraints for GR curve
+                                         priors_GR = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
+                                         lower_GR = list(c(0.1, -1, min(unique(concentration), na.rm = T)*1e-2)),
+                                         upper_GR = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2)),
+                                         ## constraints for traditional curve
+                                         priors_rel_cell = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
+                                         lower_rel_cell = list(c(0.1, 0, min(unique(concentration), na.rm = T)*1e-2)),
+                                         upper_rel_cell = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2))
+                                         )
+  #############
+  # for each "experiment" (group of data to be fitted to a curve)
   for(i in 1:length(experiments)) {
-    # print(i)
+    # subset the data to just that experiment
     data_exp = inputData[inputData$experiment == experiments[i], ]
+    if(!is.null(metadata)) metadata[i,] = data_exp[1,groupingVariables, drop = FALSE]
     
-    if(!is.null(metadata)) {
-      metadata[i,] = data_exp[1,groupingVariables, drop = FALSE]
-    }
     GR_mean[i] = mean(data_exp$GRvalue, na.rm = TRUE)
     rel_cell_mean[i] = mean(data_exp$rel_cell_count, na.rm = TRUE)
     # calculate avg number of cell doublings in control and treated experiments
@@ -106,11 +132,6 @@
     lower_rel_cell = c(.1, 0, min(c)*1e-2)
     upper_rel_cell = c(5, 1, max(c)*1e2)
     if(dim(data_exp)[1] > 1) {
-      controls = drc::drmc()
-      controls$relTol = 1e-06
-      controls$errorm = FALSE
-      controls$noMessage = TRUE
-      controls$rmNA = TRUE
       # GR curve fitting
       # biphasic model fitting
       # curve 1: a = Einf, b = log10_EC50, c = h
@@ -173,7 +194,9 @@
         #sse = get_sse(ypred, ytrue)
         #rsquare = 1 - (sse/sst)
         ## Get fitted parameters for biphasic function
-        bi_fit_params = bi_fit$par %>% magrittr::set_names(p_bi$parameter)
+        params_bi[i,] = bi_fit$par #%>% magrittr::set_names(p_bi$parameter)
+      } else {
+        params_bi[i,] = rep(NA, 6) #%>% magrittr::set_names(p_bi$parameter)
       }
       # logistic model fitting
       output_model_new = try(drc::drm(
@@ -185,7 +208,7 @@
          !is.null(stats::coef(output_model_new)) && 
          !is.null(stats::residuals(output_model_new))
          ) {
-        parameters[i,] = c(as.numeric(stats::coef(output_model_new)))
+        params_GR[i,] = c(as.numeric(stats::coef(output_model_new)))
         # F-test for the significance of the sigmoidal fit
         Npara = 3 # N of parameters in the growth curve
         Npara_flat = 1 # F-test for the models
@@ -199,7 +222,7 @@
         pval_GR[i] = f_pval
         R_square_GR[i] = 1 - RSS2/RSS1
       } else {
-        parameters[i,] = NA
+        params_GR[i,] = NA
         pval_GR[i] = NA
         R_square_GR[i] = NA
       }
@@ -213,7 +236,7 @@
          !is.null(stats::coef(output_model_new_rel_cell)) && 
          !is.null(stats::residuals(output_model_new_rel_cell))
          ) {
-        parameters2[i,] = c(as.numeric(stats::coef(output_model_new_rel_cell)))
+        params_trad[i,] = c(as.numeric(stats::coef(output_model_new_rel_cell)))
         # F-test for the significance of the sigmoidal fit
         Npara = 3 # N of parameters in the growth curve
         Npara_flat = 1 # F-test for the models
@@ -227,7 +250,7 @@
         pval_rel_cell[i] = f_pval
         R_square_rel_cell[i] = 1 - RSS2/RSS1
       } else {
-        parameters2[i,] = NA
+        params_trad[i,] = NA
         pval_rel_cell[i] = NA
         R_square_rel_cell[i] = NA
       }
@@ -262,7 +285,7 @@
                    diff_vector, na.rm = TRUE)/conc_range
   }
 
-  parameters = cbind(parameters, parameters2)
+  parameters = cbind(params_GR, params_trad, params_bi)
   parameters$ctrl_cell_doublings = ctrl_cell_doublings
   parameters$concentration_points = concentration_points
   # Calculate GR50 from parameters
@@ -351,7 +374,9 @@
   parameters = parameters[,c('GR50', 'log10_GR50','GRmax','GR_AOC','GEC50', 'log10_GEC50',
                              'GRinf','h_GR','r2_GR','pval_GR', 'fit_GR','flat_fit_GR', 
                              'IC50', 'log10_IC50','Emax', 'AUC', 'EC50', 'log10_EC50',
-                             'Einf', 'h', 'r2_rel_cell', 'pval_rel_cell', 'fit_rel_cell',
+                             'Einf', 'h', 
+                             "Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2",
+                             'r2_rel_cell', 'pval_rel_cell', 'fit_rel_cell',
                              'flat_fit_rel_cell','experiment',
                              'concentration_points', 'ctrl_cell_doublings')]
   if(!is.null(metadata)) {
@@ -722,6 +747,7 @@ GRfit = function(inputData, groupingVariables, case = "A",
   Metric = c('ctrl_cell_doublings','GR50','log10_GR50','GRmax','GR_AOC','GEC50','log10_GEC50',
              'GRinf','h_GR','r2_GR','pval_GR','flat_fit_GR', 
               'IC50', 'log10_IC50','Emax', 'AUC', 'EC50', 'log10_EC50','Einf', 'h', 
+             "Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2",
               'r2_rel_cell', 'pval_rel_cell', 'flat_fit_rel_cell')
   assays = parameter_table[ , Metric]
   rownames(assays) = parameter_table$experiment
@@ -747,6 +773,7 @@ GRfit = function(inputData, groupingVariables, case = "A",
     "The concentration at half-maximal effect (not growth rate normalized)",
     "The asymptotic effect of the drug (not growth rate normalized)",
     "The Hill coefficient of the fitted (traditional) dose response curve, which reflects how steep the (traditional) dose response curve is",
+    rep("", 6),
     "log10 value of EC50",
     "The coefficient of determination - essentially how well the (traditional) curve fits to the data points",
     "The p-value of the F-test comparing the fit of the (traditional) curve to a horizontal line fit",
