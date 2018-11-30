@@ -30,7 +30,8 @@
 #' @export
 
 GRgetValues <- function(fitData) {
-  return(as.data.frame(metadata(fitData)[[1]]))
+  #return(as.data.frame(metadata(fitData)[[1]]))
+  return(fitData$metadata$gr_table)
 }
 
 
@@ -67,8 +68,9 @@ GRgetValues <- function(fitData) {
 #' @export
 
 GRgetMetrics <- function(fitData) {
-  return(cbind(as.data.frame(SummarizedExperiment::colData(fitData)), 
-               as.data.frame(t(SummarizedExperiment::assay(fitData)))))
+  return(fitData$assays)
+  #return(cbind(as.data.frame(SummarizedExperiment::colData(fitData)), 
+  #             as.data.frame(t(SummarizedExperiment::assay(fitData)))))
 }
 
 #' Grouping Variables
@@ -102,7 +104,8 @@ GRgetMetrics <- function(fitData) {
 #' @export
 
 GRgetGroupVars <- function(fitData) {
-  return(S4Vectors::metadata(fitData)[[2]])
+  #return(S4Vectors::metadata(fitData)[[2]])
+  return(fitData$metadata$groupingVariables)
 }
 
 #' GR metrics definitions

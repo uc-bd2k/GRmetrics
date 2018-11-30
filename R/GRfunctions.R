@@ -96,20 +96,292 @@
   controls$rmNA = TRUE
   
   ##### re-writing loop with dplyr, groupby, and lapply ######
-  data_grp = inputData %>% group_by(experiment)
-  data_grp_summ = data_grp %>% summarise(GR_mean = mean(GRvalue, na.rm = TRUE),
-                                         rel_cell_mean = mean(rel_cell_count, na.rm = TRUE),
-                                         ctrl_cell_doublings = mean(ctrl_cell_doublings, na.rm = TRUE),
-                                         conc = list(unique(concentration)),
-                                         ## constraints for GR curve
-                                         priors_GR = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
-                                         lower_GR = list(c(0.1, -1, min(unique(concentration), na.rm = T)*1e-2)),
-                                         upper_GR = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2)),
-                                         ## constraints for traditional curve
-                                         priors_rel_cell = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
-                                         lower_rel_cell = list(c(0.1, 0, min(unique(concentration), na.rm = T)*1e-2)),
-                                         upper_rel_cell = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2))
-                                         )
+  #===== constrained fit GR curve ============
+  #### h, Einf, EC50
+  # c = unique(data_exp$concentration)
+  # priors = c(2, 0.1, stats::median(c))
+  # lower = c(.1, -1, min(c)*1e-2)
+  # upper = c(5, 1, max(c)*1e2)
+  #===== constrained fit Relative cell count curve ============
+  # priors_rel_cell = c(2, 0.1, stats::median(c))
+  # lower_rel_cell = c(.1, 0, min(c)*1e-2)
+  # upper_rel_cell = c(5, 1, max(c)*1e2)
+  #==== biphasic curve fit ==============
+  # ec50_low = log10(max(c(min(c) * 1e-4, 1e-7)))
+  # ec50_high = log10(min(c(max(c) * 1e2, 1e2)))
+  # cc = log10(c)
+
+  grp = dplyr::syms(groupingVariables)
+  data_grp = inputData %>% dplyr::group_by(experiment, !!!grp)
+  data_grp_summ = data_grp %>% dplyr::summarise(
+    GR_mean = mean(GRvalue, na.rm = TRUE),
+    Npara_flat = 1,
+    RSS1 = sum( (GRvalue - mean(GRvalue, na.rm = TRUE))^2, na.rm = TRUE ),
+    rel_cell_mean = mean(rel_cell_count, na.rm = TRUE),
+    ctrl_cell_doublings = mean(ctrl_cell_doublings, na.rm = TRUE),
+    conc = list(unique(concentration)),
+    cc = list( log10(unique(concentration)) ),
+    GRvalue = list ( GRvalue ),
+    rel_cell_count = list ( rel_cell_count ),
+    concentration = list ( concentration )
+    # ## constraints for GR curve
+    # priors_GR = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
+    # lower_GR = list(c(0.1, -1, min(unique(concentration), na.rm = T)*1e-2)),
+    # upper_GR = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2)),
+    # ## constraints for traditional curve
+    # priors_rel_cell = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
+    # lower_rel_cell = list(c(0.1, 0, min(unique(concentration), na.rm = T)*1e-2)),
+    # upper_rel_cell = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2))
+    )
+  data_grp_summ %<>% dplyr::group_by(experiment, !!!grp) %>%
+    dplyr::mutate(
+      ec50_low = log10(max(c(min(unlist(conc)) * 1e-4, 1e-7))) ,
+      ec50_high = log10(min(c(max(unlist(conc)) * 1e2, 1e2))) 
+      ) %>%
+    dplyr::mutate(
+      p_bi_GR = list ( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,             ~upper,
+        "GRinf_1",                     -.05,        0.1,                  1, 
+        "log10_GEC50_1",          ec50_low, median(unlist(cc)),   log10(1),
+        "h_GR_1",                       0.025,          2,                  5,
+        "GRinf_2",                       -1,       -0.1,                0.5, 
+        "log10_GEC50_2",        log10(0.3),   log10(1),          ec50_high,
+        "h_GR_2",                       0.025,          2,                  5
+        ) ),
+      p_bi_rel = list ( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,             ~upper,
+        "Einf_1",                      0.5,       0.75,                  1, 
+        "log10_EC50_1",          ec50_low, median(unlist(cc)),   log10(1),
+        "h_1",                       0.025,          2,                  5,
+        "Einf_2",                        0,       0.25,                0.5, 
+        "log10_EC50_2",        log10(0.3),   log10(1),          ec50_high,
+        "h_2",                       0.025,          2,                  5
+      ) ),
+      p_sig_GR = list( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,    ~upper,
+        "GRinf",                       -1,        0.1,         1, 
+        "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
+        "h_GR",                         0.1,          2,         5
+        ) ),
+      p_sig_rel = list ( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,    ~upper,
+        "Einf",                        0,        0.1,         1, 
+        "log10_EC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
+        "h",                         0.1,          2,         5
+        ) )
+    )
+  # extrapolrange = 10
+  # cmin = log10(min(c)/extrapolrange)
+  # cmax = log10(max(c) * extrapolrange)
+  # xc = 10^(seq(cmin, cmax, 0.05))
+  ## Define the biphasic dose-response function
+  ## x is concentration, p is the parameter vector
+  opfct_bi = function(x, p) {
+    term1 = 1 + (p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3]))
+    term2 = 1 + (p[4] + (1 - p[4])/(1 + (x / (10^p[5])) ^ p[6]))
+    2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
+  }
+  ## Define the sigmoidal (or logistic) dose-response function
+  opfct_sig = function(x, p) {
+    p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
+  }
+  #yexp_bi = data_exp$GRvalue
+  ## Define the residual sum of squares functions
+  sum_square_bi = function(x, y, p) {sum((y - opfct_bi(x, p))^2)}
+  sum_square_sig = function(x, y, p) {sum((y - opfct_sig(x, p))^2)}
+  #bi_controls = list(maxit = 500)
+  ## Fit biphasic curve (GR)
+  data_grp_summ$bi_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_bi_GR[[i]]
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$GRvalue[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_bi(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B", 
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  ## Fit biphasic curve (relative cell count)
+  data_grp_summ$bi_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_bi_rel[[i]]
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$rel_cell_count[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_bi(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B", 
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  ## Fit low sigmoidal fit (GR)
+  data_grp_summ$sig_low_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_bi_GR[[i]][1:3,]
+    ## remove "_1" and "_2" from parameter names
+    param_df %<>% mutate(parameter = gsub("_1$", "", parameter))
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$GRvalue[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B", 
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  ## Fit high sigmoidal fit (GR)
+  data_grp_summ$sig_high_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_bi_GR[[i]][4:6,]
+    ## remove "_1" and "_2" from parameter names
+    param_df %<>% mutate(parameter = gsub("_2$", "", parameter))
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$GRvalue[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B", 
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  ## Fit low sigmoidal fit (relative cell count)
+  data_grp_summ$sig_low_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_bi_rel[[i]][1:3,]
+    ## remove "_1" and "_2" from parameter names
+    param_df %<>% mutate(parameter = gsub("_1$", "", parameter))
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$rel_cell_count[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B", 
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  ## Fit high sigmoidal fit (relative cell count)
+  data_grp_summ$sig_high_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_bi_rel[[i]][4:6,]
+    ## remove "_1" and "_2" from parameter names
+    param_df %<>% mutate(parameter = gsub("_2$", "", parameter))
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$rel_cell_count[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B",
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  
+  ## Fit normal sigmoidal fit (GR)
+  data_grp_summ$sig_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_sig_GR[[i]]
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$GRvalue[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B",
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  ## Fit normal sigmoidal fit (relative cell count)
+  data_grp_summ$sig_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
+    param_df = data_grp_summ$p_sig_rel[[i]]
+    xx = data_grp_summ$concentration[[i]]
+    yy = data_grp_summ$rel_cell_count[[i]]
+    fit = try(optim(par = param_df$prior, 
+              function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+              hessian = TRUE, method = "L-BFGS-B",
+              lower = param_df$lower, upper = param_df$upper))
+    fit$parameters = param_df$parameter
+    fit$lower = param_df$lower
+    fit$upper = param_df$upper
+    fit$prior = param_df$prior
+    return(fit)
+  })
+  
+  constraints_sig = list(normal = NULL, low = NULL, high = NULL)
+  constraints_bi = list(normal = NULL)
+  fit_types = list(sigmoid = constraints_sig, biphasic = constraints_bi)
+  parameters = list(GR = fit_types, rel_cell = fit_types)
+
+  for(x in c("sig_fit_rel", "sig_fit_GR", "sig_low_fit_rel", "sig_low_fit_GR",
+             "sig_high_fit_rel", "sig_high_fit_GR", "bi_fit_rel", "bi_fit_GR")) {
+    params = data_grp_summ[[x]][[1]]$parameters
+    df = data_grp_summ %>% dplyr::select(experiment, !!!grp, RSS1) %>% dplyr::ungroup()
+    vals = sapply(data_grp_summ[[x]], function(y) { 
+      if(!class(y) == "try-error") { y$par } else { rep(NA, length(params)) }
+      }) %>% t() %>% as.data.frame() %>%
+      magrittr::set_colnames(params)
+    df = cbind(df, vals)
+    df$RSS2 = sapply(data_grp_summ[[x]], function(y) { 
+      if(!class(y) == "try-error") { y$value } else { NA }
+    })
+    Npara_flat = 1
+    Npara = length(params)
+    df1 = Npara - Npara_flat
+    df$df2 =  sapply(data_grp_summ$GRvalue, function(y) return(length(na.omit(y)) - Npara + 1) )
+    df$f_value = with(df, ( (RSS1 - RSS2)/df1 )/(RSS2/df2) )
+    df$f_pval = with(df, stats::pf(f_value, df1, df2, lower.tail = FALSE) )
+    
+    pcutoff = ifelse(force == FALSE, .05 , 1)
+    # Flat or sigmoid fit for GR curve
+    df$fit = sapply(1:length(df$f_pval), function(i) {
+      pval = df$f_pval[i]
+      if(is.na(pval) || pval > pcutoff) { 
+        return("flat")
+      } else {
+        return("curve")
+      }
+    })
+    if(grepl("_GR", x)) { df$flat = data_grp_summ$GR_mean }
+    if(grepl("_rel", x)) { df$flat = data_grp_summ$rel_cell_mean }
+    
+    if(x == "sig_fit_GR") { parameters$GR$sigmoid$normal = df }
+    if(x == "sig_low_fit_GR") { parameters$GR$sigmoid$low = df }
+    if(x == "sig_high_fit_GR") { parameters$GR$sigmoid$high = df }
+    if(x == "bi_fit_GR") { parameters$GR$biphasic$normal = df }
+    
+    if(x == "sig_fit_rel") { parameters$rel_cell$sigmoid$normal = df }
+    if(x == "sig_low_fit_rel") { parameters$rel_cell$sigmoid$low = df }
+    if(x == "sig_high_fit_rel") { parameters$rel_cell$sigmoid$high = df }
+    if(x == "bi_fit_rel") { parameters$rel_cell$biphasic$normal = df }
+  }
+  ## temporary -- return parameters for curve plotting
+  return(parameters)
+  
+  # # F-test for the significance of the sigmoidal fit
+  # Npara = 3 # N of parameters in the growth curve
+  # Npara_flat = 1 # F-test for the models
+  # RSS2 = sum(stats::residuals(output_model_new)^2, na.rm = TRUE)
+  # RSS1 = sum((data_exp$GRvalue - mean(data_exp$GRvalue, na.rm = TRUE))^2,
+  #            na.rm = TRUE)
+  # df1 = (Npara - Npara_flat)
+  # df2 = (length(na.omit(data_exp$GRvalue)) - Npara + 1)
+  # f_value = ((RSS1-RSS2)/df1)/(RSS2/df2)
+  # f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
+  # pval_GR[i] = f_pval
+  # R_square_GR[i] = 1 - RSS2/RSS1
   #############
   # for each "experiment" (group of data to be fitted to a curve)
   for(i in 1:length(experiments)) {
@@ -137,22 +409,22 @@
       # curve 1: a = Einf, b = log10_EC50, c = h
       # curve 2: d = Einf, e = log10_EC50, f = h
       #===== constrained fit biphasic curve ============
-      ec50_low = log10(max(c(min(c) * 1e-4, 1e-7)))
-      ec50_high = log10(min(c(max(c) * 1e2, 1e2)))
-      cc = log10(c)
-      p_bi = tibble::tribble(
-        ~parameter,                 ~lower,     ~prior,             ~upper,
-        "Einf_1",                     -.05,        0.1,                  1, 
-        "log10_GEC50_1",          ec50_low, median(cc),           log10(1),
-        "h_1",                       0.025,          2,                  5,
-        "Einf_2",                       -1,       -0.1,                0.5, 
-        "log10_GEC50_2",        log10(0.3),   log10(1),          ec50_high,
-        "h_2",                       0.025,          2,                  5
-      )
-      extrapolrange = 10
-      cmin = log10(min(c)/extrapolrange)
-      cmax = log10(max(c) * extrapolrange)
-      xc = 10^(seq(cmin, cmax, 0.05))
+      # ec50_low = log10(max(c(min(c) * 1e-4, 1e-7)))
+      # ec50_high = log10(min(c(max(c) * 1e2, 1e2)))
+      # cc = log10(c)
+      # p_bi = tibble::tribble(
+      #   ~parameter,                 ~lower,     ~prior,             ~upper,
+      #   "Einf_1",                     -.05,        0.1,                  1, 
+      #   "log10_GEC50_1",          ec50_low, median(cc),           log10(1),
+      #   "h_1",                       0.025,          2,                  5,
+      #   "Einf_2",                       -1,       -0.1,                0.5, 
+      #   "log10_GEC50_2",        log10(0.3),   log10(1),          ec50_high,
+      #   "h_2",                       0.025,          2,                  5
+      # )
+      # extrapolrange = 10
+      # cmin = log10(min(c)/extrapolrange)
+      # cmax = log10(max(c) * extrapolrange)
+      # xc = 10^(seq(cmin, cmax, 0.05))
       ## Define the biphasic dose-response function
       ## x is concentration, p is the parameter vector
       opfct_bi = function(x, p) {
@@ -186,6 +458,19 @@
       #             function(p, x, y) min_func_sig(x = data_exp$concentration, y = yexp_bi, p),
       #             hessian = TRUE, method = "L-BFGS-B", 
       #             lower = lower[c(2, 3, 1)], upper = upper[c(2, 3, 1)]))
+      ### get biphasic fit parameters
+      if(class(bi_fit) != "try-error") {
+        Npara = 6
+        ## Get sum of squares for biphasic fit
+        RSS = bi_fit$value
+        #sst = np.sum([(yt - np.mean(ytrue))**2  for yt in ytrue])
+        #sse = get_sse(ypred, ytrue)
+        #rsquare = 1 - (sse/sst)
+        ## Get fitted parameters for biphasic function
+        params_bi[i,] = bi_fit$par #%>% magrittr::set_names(p_bi$parameter)
+      } else {
+        params_bi[i,] = rep(NA, 6) #%>% magrittr::set_names(p_bi$parameter)
+      }
       if(class(bi_fit) != "try-error") {
         Npara = 6
         ## Get sum of squares for biphasic fit
@@ -735,10 +1020,19 @@ GRfit = function(inputData, groupingVariables, case = "A",
   gr_table = .GRcalculate(inputData, groupingVariables, cap, case,
                           initial_count)
   GRlogfit = .GRlogisticFit(gr_table, groupingVariables, force, cap)
-  parameter_table = GRlogfit$parameters
-  GR_drc_list = GRlogfit$GR_drc_list
-  trad_drc_list = GRlogfit$trad_drc_list
-
+  #parameter_table = GRlogfit$parameters
+  #GR_drc_list = GRlogfit$GR_drc_list
+  #trad_drc_list = GRlogfit$trad_drc_list
+  ##### temporary - return parameters ####
+  output = list(
+    assays = GRlogfit,
+    #colData = colData,
+    #rowData = rowData, 
+    metadata = list(gr_table = gr_table, 
+                    groupingVariables = groupingVariables))
+  return(output)
+  ########
+  
   colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_rel_cell',
                                 'experiment', 'concentration_points')]
   rownames(colData) = colData$experiment

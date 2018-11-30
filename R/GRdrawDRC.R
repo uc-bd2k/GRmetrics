@@ -64,7 +64,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
                       min = "auto", max = "auto",
                       color = "experiment",
                       points = c("average", "all", "none"),
-                      curves = c("sigmoid", "line", "biphasic", "none"),
+                      curves = c("sigmoid", "line", "biphasic", "sigmoid_high", "sigmoid_low", "none"),
                       bars = c("none", "sd", "se"),
                       xrug = c("none", "GR50", "GEC50", "IC50", "EC50"),
                       yrug = c("none", "GRinf", "GRmax", "Einf", "Emax"),
@@ -90,8 +90,8 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   assertthat::assert_that(is.character(metric))
   assertthat::assert_that(metric %in% c("GR", "rel_cell"))
   # check that curve parameter is allowed
-  assertthat::assert_that(is.character(curve))
-  assertthat::assert_that(curve %in% c("sigmoid", "line", "biphasic", "none"))
+  assertthat::assert_that(is.character(curves))
+  assertthat::assert_that(curves %in% c("sigmoid", "line", "biphasic", "sigmoid_high", "sigmoid_low", "none"))
   # check that color variable is allowed
   assertthat::assert_that(color %in% c("experiment", group_vars), 
                           msg = "'color' must be either 'experiment' or one of the grouping variables")
@@ -121,12 +121,16 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   #assertthat::assert_that(length(facet) == 1)
   assertthat::assert_that(all(facet %in% group_vars) | identical(facet, "none"),
                           msg = 'facet must be either "none" or a subset of the grouping variables')
-  facet = dplyr::syms(facet)
   assertthat::assert_that(metric != "IC", msg = 'For the traditional dose-response curve based on relative cell counts, please use metric = "rel_cell" instead of metric = "IC". This notation has been changed as of Version 1.3.2.')
   # data frame for points
-  data = S4Vectors::metadata(fitData)[[1]]
+  data = GRmetrics::GRgetValues(fitData)
   # data frame for metrics, to make curves and rugs
-  parameterTable = GRmetrics::GRgetMetrics(fitData) %>% dplyr::as_tibble()
+  parameter_list = GRmetrics::GRgetMetrics(fitData)[[metric]]
+  if(curves == "sigmoid") { parameterTable =  parameter_list$sigmoid$normal }
+  if(curves == "sigmoid_high") { parameterTable =  parameter_list$sigmoid$high }
+  if(curves == "sigmoid_low") { parameterTable =  parameter_list$sigmoid$low }
+  if(curves == "biphasic") { parameterTable =  parameter_list$biphasic$normal }
+  
   if(length(group_vars) == 0) data$experiment = "All Data"
   # change experiment to character from factor if necessary
   data$experiment = as.character(data$experiment) 
@@ -141,37 +145,71 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   len = (log10(max) - log10(min))*20
   concentration = 10^(seq(log10(min) - 1, log10(max) + 1, length.out = len))
   # define function for sigmoid curve mapping
-  .create_curve_data = function(EC50, Einf, h, fit_type, flat_fit, experiment, c) {
-    df = data.frame(experiment = experiment, concentration = c, log10_concentration = log10(c))
-    if(fit_type == "sigmoid") df$y_val = Einf + (1 - Einf)/(1 + (c/EC50)^h)
-    if(fit_type == "flat") df$y_val = flat_fit
+  .create_curve_data = function(EC50, Einf, h, fit, flat, experiment, cc) {
+    df = data.frame(experiment = experiment, concentration = cc, log10_concentration = log10(cc))
+    if(fit == "curve") df$y_val = Einf + (1 - Einf)/(1 + (cc / (10^EC50)^h))
+    if(fit == "flat") df$y_val = flat
     return(df)
   }
   # define function for biphasic sigmoid curve mapping
-  .create_biphasic_data = function(EC50_1, Einf_1, h_1, EC50_2, Einf_2, h_2, 
-                                   experiment, c) {
-    df = data.frame(experiment = experiment, concentration = c, log10_concentration = log10(c))
-    term1 = 1 + (EC50_1 + (1 - EC50_1)/(1 + (x / (10^Einf_1)) ^ h_1))
-    term2 = 1 + (EC50_2 + (1 - EC50_2)/(1 + (x / (10^Einf_2)) ^ h_2))
-    df$y_val = 2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
+  .create_biphasic_data = function(EC50_1, Einf_1, h_1, EC50_2, Einf_2, h_2,
+                                   fit, flat,
+                                   experiment, cc) {
+    df = data.frame(experiment = experiment, concentration = cc, log10_concentration = log10(cc))
+    term1 = 1 + (Einf_1 + (1 - Einf_1)/(1 + (cc / (10^EC50_1)) ^ h_1))
+    term2 = 1 + (Einf_2 + (1 - Einf_2)/(1 + (cc / (10^EC50_2)) ^ h_2))
+    if(fit == "curve") { df$y_val = 2^( 0.5*( log2(term1) + log2(term2) ) ) - 1 }
+    if(fit == "flat")  df$y_val = flat
     return(df)
   }
   # make list (tibble) of inputs for curve
   if(metric == "rel_cell") {
-    curve_input_list = parameterTable %>% dplyr::select(EC50, Einf, h, fit_rel_cell, flat_fit_rel_cell, experiment) %>%
-      dplyr::rename(fit_type = fit_rel_cell, flat_fit = flat_fit_rel_cell) %>% dplyr::as_tibble() %>%
-      dplyr::mutate(c = list(concentration))
+    if(grepl("sigmoid", curves)) {
+      curve_input_list = parameterTable %>% dplyr::select(log10_EC50, Einf, h, 
+                                                          fit, flat, experiment) %>%
+        dplyr::mutate_if(is.factor, as.character) %>%
+        dplyr::rename(EC50 = log10_EC50) %>%
+        #dplyr::rename(fit_type = fit_rel_cell, flat_fit = flat_fit_rel_cell) %>% 
+        dplyr::as_tibble() %>%
+        dplyr::mutate(c = list(concentration))
+    } else if(grepl("biphasic", curves)) {
+      curve_input_list = parameterTable %>% dplyr::select(log10_EC50_1, Einf_1, h_1, 
+                                                          log10_EC50_2, Einf_2, h_2,
+                                                          fit, flat, experiment) %>%
+        dplyr::mutate_if(is.factor, as.character) %>%
+        dplyr::rename(EC50_1 = log10_EC50_1,
+                      EC50_2 = log10_EC50_2) %>% 
+        dplyr::as_tibble() %>% dplyr::mutate(cc = list(concentration))
+    }
   } else if(metric == "GR") {
-    curve_input_list = parameterTable %>% dplyr::select(GEC50, GRinf, h_GR, fit_GR, flat_fit_GR, experiment) %>%
-      dplyr::rename(EC50 = GEC50, Einf = GRinf, h = h_GR, fit_type = fit_GR, flat_fit = flat_fit_GR) %>% 
-      dplyr::as_tibble() %>% dplyr::mutate(c = list(concentration))
+    if(grepl("sigmoid", curves)) {
+      curve_input_list = parameterTable %>% dplyr::select(log10_GEC50, GRinf, h_GR, 
+                                                          fit, flat, experiment) %>%
+        dplyr::mutate_if(is.factor, as.character) %>%
+        dplyr::rename(EC50 = log10_GEC50, Einf = GRinf, h = h_GR) %>% 
+        dplyr::as_tibble() %>% dplyr::mutate(cc = list(concentration))
+    } else if(grepl("biphasic", curves)) {
+      curve_input_list = parameterTable %>% dplyr::select(log10_GEC50_1, GRinf_1, h_GR_1, 
+                                                          log10_GEC50_2, GRinf_2, h_GR_2,
+                                                          fit, flat, experiment) %>%
+        dplyr::mutate_if(is.factor, as.character) %>%
+        dplyr::rename(EC50_1 = log10_GEC50_1, Einf_1 = GRinf_1, h_1 = h_GR_1,
+                      EC50_2 = log10_GEC50_2, Einf_2 = GRinf_2, h_2 = h_GR_2) %>% 
+        dplyr::as_tibble() %>% dplyr::mutate(c = list(concentration))
+    }
   }
   # make data frame for mapping "experiment" to grouping variables
-  data_for_join = data %>% dplyr::select_at(c("experiment", group_vars))
+  data_for_join = parameterTable %>% dplyr::select_at(c("experiment", group_vars)) %>%
+    dplyr::mutate_if(is.factor, as.character)
   # data frame for curves to give to ggplot
-  curve_data_all = suppressWarnings(purrr::pmap_dfr(.l = curve_input_list, .f = .create_curve_data)) %>%
-    dplyr::left_join(data_for_join, by = "experiment")
-  
+  if(grepl("sigmoid", curves)) {
+    curve_data_all = suppressWarnings(purrr::pmap_dfr(.l = curve_input_list, .f = .create_curve_data)) %>%
+      dplyr::left_join(data_for_join, by = "experiment")
+  } else if(grepl("biphasic", curves)) {
+    curve_data_all = suppressWarnings(purrr::pmap_dfr(.l = curve_input_list, .f = .create_biphasic_data)) %>%
+      dplyr::left_join(data_for_join, by = "experiment")
+  }
+
   # data frame for (all) points
   if(metric == "GR") {
     data %<>% dplyr::select_at(c(group_vars, "concentration", "log10_concentration", 
@@ -208,7 +246,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
           #### scale transformations don't work with plotly :(
           # scale_x_continuous(labels = trans_format("identity", math_format(10^.x)),limits = c(-3.5, 1.5)) +
           # annotation_logticks(sides = "b", short = unit(0.1, "cm"), mid = unit(0.2, "cm"),long = unit(0.3, "cm"))
-  } else if(curves %in% c("sigmoid", "biphasic")) {
+  } else if(curves %in% c("sigmoid", "biphasic", "sigmoid_low", "sigmoid_high")) {
     p = p + ggplot2::geom_line(data = curve_data_all,
           ggplot2::aes(x = log10_concentration, y = y_val, colour = !!color, group = experiment), size = 1.1)
   } else if(curves == "none") {
@@ -225,7 +263,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
     # do nothing
   }
   # add error bars to the plot
-  bar_width = 0.2
+  bar_width = 0
   if(bars == "sd") {
     p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, 
               ymin = y_val_mean - y_val_sd, ymax = y_val_mean + y_val_sd, 
@@ -285,6 +323,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
 
   # configure plot facets
   if(!identical(facet, "none")) {
+    facet = dplyr::syms(facet)
     p = p + lemon::facet_rep_wrap(facet, ncol = 5)
   }
   # add theme to plot, keep aspect ratio 1:1
