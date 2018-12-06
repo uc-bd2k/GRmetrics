@@ -2,7 +2,7 @@
                         initial_count){
   ### see lines 152-213 in https://github.com/datarail/DrugResponse/blob/1d0fd1898e797b74f611eb61dbd6926ac715bb83/MATLAB/import_columbus/Process_CellCountData2.m
   
-  #inputData = readr::read_csv("/Users/nicholasclark/Desktop/GR_v2_all.csv")
+  #inputData = readr::read_csv("/Users/nicholasclark/Desktop/Git/grmetrics_resources/GR_v2_all.csv")
   ### Note: what about NA values in Deadcount and Cellcount?? these will propagate currently, but we may want to set them to 0 instead?
   inputData %<>% 
     dplyr::mutate(too_few = Deadcount + Cellcount < .95*(Day0Cnt + Day0DeadCnt)) %>%
@@ -44,11 +44,30 @@
     GR_d = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/Time ) - 1,
   )
 
-  ##### taylor series approximation... fix later
-  # inputData %<>% dplyr::mutate(
-  #   Eqidx = abs(Cellcount - Day0Cnt)/Cellcount < 1e-10,
-  #   Dratio_times_gr = gr*Dratio
-  # )
+  inputData %<>% dplyr::mutate(
+    #diff = abs(Cellcount - Day0Cnt)/Cellcount,
+    #Dratio_times_gr = gr*Dratio,
+    Eqidx = abs(Cellcount - Day0Cnt)/Cellcount < 1e-10
+  )
+  if(sum(inputData$Eqidx, na.rm = TRUE) > 0) {
+    warning("issue when Cellcount == Day0Cnt (approx.), denominator of Dratio is approx. zero -> use L'hospital's rule on Dratio*gr")
+    # a = Cellcount
+    # b = Day0Cnt
+    # d = pmax(Deadcount - Day0DeadCnt, 1, na.rm = T)
+    # Dratio*gr = d*log2(a/b)/(a-b)  ===> consider f(x) = d*log2(x/b)/(x-b) as x->b
+    # lim x->b f(x) = lim x->b { d*log2(x/b)/(x-b) } = d/(b*log(2)) by L'hospital's rule
+    inputData %<>% dplyr::mutate(
+      Dratio_gr = ifelse(!Eqidx, NA,
+        pmax(Deadcount - Day0DeadCnt, 1, na.rm = T) /(Day0Cnt*log(2)) )
+    )
+    inputData %<>% dplyr::mutate(
+      GR_s = ifelse(!Eqidx, GR_s,
+                    2^((gr + Dratio_gr)/((1 + Dratio_ctrl)*gr_ctrl))-1),
+      GR_d = ifelse(!Eqidx, GR_d,
+                    2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/Time)-1)
+    )
+  }
+  ##### taylor series approximation, translated from matlab code. 
   # if(sum(inputData$Eqidx, na.rm = TRUE) > 0) {
   #   warning("issue when Cellcount == Day0Cnt (approx.), denominator of Dratio is approx. zero -> Taylor series")
   #   ##### not sure about the correctness of this part
