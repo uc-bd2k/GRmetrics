@@ -1,5 +1,5 @@
 .GRcalculateV2 = function(inputData, groupingVariables, cap = FALSE, case = "A",
-                        initial_count){
+                        initial_count) {
   ### see lines 152-213 in https://github.com/datarail/DrugResponse/blob/1d0fd1898e797b74f611eb61dbd6926ac715bb83/MATLAB/import_columbus/Process_CellCountData2.m
   
   #inputData = readr::read_csv("/Users/nicholasclark/Desktop/Git/grmetrics_resources/GR_v2_all.csv")
@@ -33,6 +33,7 @@
   }
   ### how should we treat NAs here?? na.rm or not?
   inputData %<>% dplyr::mutate(
+    # Dratio = (increase in dead cells, maxed out at 100%)/(increase in alive cells)
     Dratio = pmax(Deadcount - Day0DeadCnt, 1, na.rm = T)/(Cellcount - Day0Cnt),
     Dratio_ctrl = pmax(Ctrl_Deadcount - Day0DeadCnt, 1, na.rm = T)/(Ctrlcount - Day0Cnt),
     gr = log2(Cellcount/Day0Cnt),
@@ -41,7 +42,7 @@
   ## These are slightly different from the formulas in the slide-deck, which are correct?
   inputData %<>% dplyr::mutate(
     GR_s = 2^( (1 + Dratio)*gr/( (1 + Dratio_ctrl)*gr_ctrl) ) - 1,
-    GR_d = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/Time ) - 1,
+    GR_d = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/Time ) - 1
   )
 
   inputData %<>% dplyr::mutate(
@@ -67,6 +68,13 @@
                     2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/Time)-1)
     )
   }
+  
+  inputData %<>% dplyr::mutate(
+    GR_combined = GR_s + GR_d,
+    GR_naive = 2^(gr/gr_ctrl) - 1
+  )
+  return(inputData)
+
   ##### taylor series approximation, translated from matlab code. 
   # if(sum(inputData$Eqidx, na.rm = TRUE) > 0) {
   #   warning("issue when Cellcount == Day0Cnt (approx.), denominator of Dratio is approx. zero -> Taylor series")
@@ -89,4 +97,4 @@
   #   )
   # }
 
-  
+}  
