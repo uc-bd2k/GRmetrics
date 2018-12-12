@@ -71,7 +71,8 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
                       theme = c("classic", "minimal", "bw"),
                       palette = c("default","npg", "aaas"),
                       facet = "none",
-                      plot_type = c("static", "interactive")) {
+                      plot_type = c("static", "interactive"),
+                      output_type = c("together", "separate")) {
   # make all inputs length 1
   metric = metric[1]
   points = points[1]
@@ -82,6 +83,7 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   theme = theme[1]
   palette = palette[1]
   plot_type = plot_type[1]
+  output_type = output_type[1]
   # get grouping variables
   group_vars = GRmetrics::GRgetGroupVars(fitData)
   # assertthat::assert_that(palette %in% c("default","npg", "aaas"), 
@@ -130,6 +132,9 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   if(curves == "sigmoid_high") { parameterTable =  parameter_list$sigmoid$high }
   if(curves == "sigmoid_low") { parameterTable =  parameter_list$sigmoid$low }
   if(curves == "biphasic") { parameterTable =  parameter_list$biphasic$normal }
+  if(curves == "line") { parameterTable =  parameter_list$sigmoid$normal }
+  if(curves == "none") { parameterTable =  parameter_list$sigmoid$normal }
+  
   
   if(length(group_vars) == 0) data$experiment = "All Data"
   # change experiment to character from factor if necessary
@@ -233,11 +238,14 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   data %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # points (all)
   data_mean %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # points (average)
   parameterTable %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # rugs
-  curve_data_all %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # curves
+  if(!curves %in% c("line","none")) {
+    curve_data_all %<>% dplyr::mutate_if(is.numeric, function(x) signif(x,3)) # curves
+  }
   
   # initialize plot
   p = ggplot2::ggplot()
   # add curves to the plot
+  .create_plots = function(p, data, data_mean, parameterTable, curve_data_all) {
   if(curves == "line") {
     p = p + ggplot2::geom_line(data = data_mean, ggplot2::aes(x = log10_concentration,
           y = y_val_mean, colour = !!color, group = experiment), size = 1.1)
@@ -324,13 +332,40 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   # configure plot facets
   if(!identical(facet, "none")) {
     facet = dplyr::syms(facet)
-    p = p + lemon::facet_rep_wrap(facet, ncol = 5)
+    #p = p + lemon::facet_rep_wrap(facet, ncol = 5)
+    p = p + ggplot2::facet_wrap(facet, ncol = 5)
   }
   # add theme to plot, keep aspect ratio 1:1
-  p = p + ggplot2::theme_classic()#+ do.call(theme, args = list())
+  p = p + ggplot2::theme_classic() + ggplot2::theme(legend.position = "none")#+ do.call(theme, args = list())
   # add palette to plot
   ###p = p + scale_colour_npg()
   # return ggplot or plotly object
   if(plot_type == "interactive") return(plotly::ggplotly(p))
   if(plot_type == "static") return(p + ggplot2::theme(aspect.ratio = 1))
+  }
+  if(output_type == "separate") {
+    facet_char = paste0(facet, collapse = "_")
+    if(length(facet) > 1) {
+      facet_list = syms(facet)
+      facet = sym(facet_char)
+      data %<>% dplyr::mutate(!!facet := paste(!!!facet_list, sep = "_"))
+      data_mean %<>% dplyr::mutate(!!facet := paste(!!!facet_list, sep = "_"))
+      parameterTable %<>% dplyr::mutate(!!facet := paste(!!!facet_list, sep = "_"))
+      curve_data_all %<>% dplyr::mutate(!!facet := paste(!!!facet_list, sep = "_"))
+    }
+    data_list  = split(data, f = data[[facet_char]])
+    data_mean_list  = split(data_mean, f = data_mean[[facet_char]])
+    parameterTable_list = split(parameterTable, f = parameterTable[[facet_char]])
+    curve_data_all_list = split(curve_data_all, f = curve_data_all[[facet_char]])
+    data_input_list = list(p = lapply(1:length(unique( data[[facet_char]] )), function(x) return(p)), 
+                           data = data_list, data_mean = data_mean_list, 
+                           parameterTable = parameterTable_list, curve_data_all = curve_data_all_list)
+    out = purrr::pmap(.l = data_input_list, .f = .create_plots)
+    return(out)
+  } else {
+    ### call create plot function once to output one plot object
+    out = .create_plots(p = p, data = data, data_mean = data_mean, 
+                        parameterTable = parameterTable, curve_data_all = curve_data_all)
+    return(out)
+  }
 }
