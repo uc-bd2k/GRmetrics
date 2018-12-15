@@ -366,6 +366,6 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
     ### call create plot function once to output one plot object
     out = .create_plots(p = p, data = data, data_mean = data_mean, 
                         parameterTable = parameterTable, curve_data_all = curve_data_all)
-    return(out[[1]])
+    return(list(plot = out))
   }
 }

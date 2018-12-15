@@ -21,6 +21,7 @@
   input_edited$GRvalue = GR
   input_edited$rel_cell_count = rel_cell_count
   input_edited$ctrl_cell_doublings = log2nn_ctrl
+  input_edited$treated_cell_doublings = log2nn
   tmp<-input_edited[,groupingVariables, drop = FALSE]
   experimentNew = (apply(tmp,1, function(x) (paste(x,collapse=" "))))
   if(cap == TRUE) {
@@ -37,30 +38,6 @@
 
 .GRlogisticFit = function(inputData, groupingVariables, force = FALSE,
                           cap = FALSE) {
-  # declaring values NULL to avoid note on package check
-  #experiment = NULL
-  # GR curve parameters
-  # GEC50 = NULL
-  # GRinf = NULL
-  # h_GR = NULL
-  # Relative cell count curve parameters
-  # EC50 = NULL
-  # Einf = NULL
-  # h = NULL
-  experiments = levels(inputData$experiment)
-  
-  params_GR = matrix(data = NA, ncol = 3, nrow = length(experiments))
-  params_GR = as.data.frame(params_GR)
-  
-  params_trad = matrix(data = NA, ncol = 3, nrow = length(experiments))
-  params_trad = as.data.frame(params_trad)
-  
-  params_bi = matrix(data = NA, ncol = 6, nrow = length(experiments))
-  params_bi = as.data.frame(params_bi)
-  
-  colnames(params_bi) = c("Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2")
-  colnames(params_GR) = c('h_GR','GRinf','GEC50')
-  colnames(params_trad) = c('h', 'Einf', 'EC50')
   if(length(groupingVariables) > 0) {
     metadata = matrix(data = NA, ncol = length(groupingVariables),
                       nrow = length(experiments))
@@ -69,70 +46,57 @@
   } else {
     metadata = NULL
   }
-  # More GR curve parameters
-  pval_GR = NULL
-  GRmax = NULL
-  GR_mean = NULL
-  AOC = NULL
-  R_square_GR = NULL
-  
-  # More Relative cell count curve parameters
-  pval_rel_cell = NULL
-  Emax = NULL
-  rel_cell_mean = NULL
-  AUC = NULL
-  R_square_rel_cell = NULL
-  
-  # other curve parameters
-  concentration_points = NULL
-  ctrl_cell_doublings = NULL
-  GR_drc_list = list()
-  trad_drc_list = list()
-  # drc fitting controls
-  controls = drc::drmc()
-  controls$relTol = 1e-06
-  controls$errorm = FALSE
-  controls$noMessage = TRUE
-  controls$rmNA = TRUE
-  
-  ##### re-writing loop with dplyr, groupby, and lapply ######
-  #===== constrained fit GR curve ============
-  #### h, Einf, EC50
-  # c = unique(data_exp$concentration)
-  # priors = c(2, 0.1, stats::median(c))
-  # lower = c(.1, -1, min(c)*1e-2)
-  # upper = c(5, 1, max(c)*1e2)
-  #===== constrained fit Relative cell count curve ============
-  # priors_rel_cell = c(2, 0.1, stats::median(c))
-  # lower_rel_cell = c(.1, 0, min(c)*1e-2)
-  # upper_rel_cell = c(5, 1, max(c)*1e2)
-  #==== biphasic curve fit ==============
-  # ec50_low = log10(max(c(min(c) * 1e-4, 1e-7)))
-  # ec50_high = log10(min(c(max(c) * 1e2, 1e2)))
-  # cc = log10(c)
 
   grp = dplyr::syms(groupingVariables)
   data_grp = inputData %>% dplyr::group_by(experiment, !!!grp)
   data_grp_summ = data_grp %>% dplyr::summarise(
+    ## mean GRvalue by group (all concentrations)
     GR_mean = mean(GRvalue, na.rm = TRUE),
-    Npara_flat = 1,
-    RSS1 = sum( (GRvalue - mean(GRvalue, na.rm = TRUE))^2, na.rm = TRUE ),
     rel_cell_mean = mean(rel_cell_count, na.rm = TRUE),
     ctrl_cell_doublings = mean(ctrl_cell_doublings, na.rm = TRUE),
+    treated_cell_doublings = mean(treated_cell_doublings, na.rm = TRUE),
+    concentration_points = length(unique(concentration)),
     conc = list(unique(concentration)),
     cc = list( log10(unique(concentration)) ),
     GRvalue = list ( GRvalue ),
     rel_cell_count = list ( rel_cell_count ),
     concentration = list ( concentration )
-    # ## constraints for GR curve
-    # priors_GR = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
-    # lower_GR = list(c(0.1, -1, min(unique(concentration), na.rm = T)*1e-2)),
-    # upper_GR = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2)),
-    # ## constraints for traditional curve
-    # priors_rel_cell = list(c(2, 0.1, median(unique(concentration), na.rm = T))),
-    # lower_rel_cell = list(c(0.1, 0, min(unique(concentration), na.rm = T)*1e-2)),
-    # upper_rel_cell = list(c(5, 1, max(unique(concentration), na.rm = T)*1e2))
     )
+  ## get RSS of flat fit for GR and relative cell count curve
+  data_grp_summ %<>% dplyr::mutate(
+    RSS1_GR = sum( (unlist(GRvalue) - GR_mean)^2, na.rm = TRUE ),
+    RSS1_rel_cell = sum( (unlist(rel_cell_count) - rel_cell_mean)^2, na.rm = TRUE )
+  )
+  ## calculate GRmax (or Emax) and GR_AOC (or AUC) directly from unfitted data points
+  data_grp_conc = inputData %>% dplyr::group_by(experiment, !!!grp, log10_concentration) %>%
+      dplyr::summarise(
+      # mean GRvalue by concentration in each group
+      GR_mean = mean(GRvalue, na.rm = TRUE),
+      rel_cell_mean = mean(rel_cell_count, na.rm = TRUE),
+      # GRvalue = list ( GRvalue ),
+      # rel_cell_count = list ( rel_cell_count ),
+      cc = unique(log10_concentration)
+      ) %>%
+    ## get maximum (and second largest) concentration for each group
+    dplyr::mutate(max_conc = list(sort(cc, decreasing = T)[1:2]) )
+  data_grp_conc_max = data_grp_conc %>% 
+    ## look at only two highest concentrations
+    dplyr::filter( cc %in%  unlist(max_conc) ) %>%
+    ## GRmax (Emax) = min of avg. GR value (avg. relative cell count) at the two highest concentrations
+    dplyr::summarise(
+      GRmax = min(GR_mean, na.rm = T),
+      Emax = min(rel_cell_mean, na.rm = T)
+    ) %>% dplyr::ungroup()
+  data_grp_conc_all = data_grp_conc %>% dplyr::arrange(cc) %>%
+    ### GR_AOC = area OVER the GR curve
+    dplyr::summarise(
+      GR_AOC = caTools::trapz(x = cc, y = 1 - GR_mean),
+      AUC = caTools::trapz(x = cc, y = rel_cell_mean) ) %>%
+    dplyr::ungroup()
+  
+  data_grp_conc = data_grp_conc_all %>% 
+    dplyr::full_join(data_grp_conc_max, by = c("experiment", groupingVariables) )
+  
   data_grp_summ %<>% dplyr::group_by(experiment, !!!grp) %>%
     dplyr::mutate(
       ec50_low = log10(max(c(min(unlist(conc)) * 1e-4, 1e-7))) ,
@@ -170,10 +134,7 @@
         "h",                         0.1,          2,         5
         ) )
     )
-  # extrapolrange = 10
-  # cmin = log10(min(c)/extrapolrange)
-  # cmax = log10(max(c) * extrapolrange)
-  # xc = 10^(seq(cmin, cmax, 0.05))
+  
   ## Define the biphasic dose-response function
   ## x is concentration, p is the parameter vector
   opfct_bi = function(x, p) {
@@ -224,7 +185,7 @@
   data_grp_summ$sig_low_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
     param_df = data_grp_summ$p_bi_GR[[i]][1:3,]
     ## remove "_1" and "_2" from parameter names
-    param_df %<>% mutate(parameter = gsub("_1$", "", parameter))
+    param_df %<>% dplyr::mutate(parameter = gsub("_1$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$GRvalue[[i]]
     fit = try(optim(par = param_df$prior, 
@@ -241,7 +202,7 @@
   data_grp_summ$sig_high_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
     param_df = data_grp_summ$p_bi_GR[[i]][4:6,]
     ## remove "_1" and "_2" from parameter names
-    param_df %<>% mutate(parameter = gsub("_2$", "", parameter))
+    param_df %<>% dplyr::mutate(parameter = gsub("_2$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$GRvalue[[i]]
     fit = try(optim(par = param_df$prior, 
@@ -258,7 +219,7 @@
   data_grp_summ$sig_low_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
     param_df = data_grp_summ$p_bi_rel[[i]][1:3,]
     ## remove "_1" and "_2" from parameter names
-    param_df %<>% mutate(parameter = gsub("_1$", "", parameter))
+    param_df %<>% dplyr::mutate(parameter = gsub("_1$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$rel_cell_count[[i]]
     fit = try(optim(par = param_df$prior, 
@@ -275,7 +236,7 @@
   data_grp_summ$sig_high_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
     param_df = data_grp_summ$p_bi_rel[[i]][4:6,]
     ## remove "_1" and "_2" from parameter names
-    param_df %<>% mutate(parameter = gsub("_2$", "", parameter))
+    param_df %<>% dplyr::mutate(parameter = gsub("_2$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$rel_cell_count[[i]]
     fit = try(optim(par = param_df$prior, 
@@ -328,23 +289,105 @@
   for(x in c("sig_fit_rel", "sig_fit_GR", "sig_low_fit_rel", "sig_low_fit_GR",
              "sig_high_fit_rel", "sig_high_fit_GR", "bi_fit_rel", "bi_fit_GR")) {
     params = data_grp_summ[[x]][[1]]$parameters
-    df = data_grp_summ %>% dplyr::select(experiment, !!!grp, RSS1) %>% dplyr::ungroup()
+    df = data_grp_summ %>% dplyr::select(experiment, !!!grp, ctrl_cell_doublings, treated_cell_doublings,
+                                         concentration_points) %>% dplyr::ungroup()
+    ## get fitted curve parameters
     vals = sapply(data_grp_summ[[x]], function(y) { 
       if(!class(y) == "try-error") { y$par } else { rep(NA, length(params)) }
       }) %>% t() %>% as.data.frame() %>%
       magrittr::set_colnames(params)
     df = cbind(df, vals)
+    ## Get GRmax (Emax) and GR_AOC (AUC)
+    if(grepl("_GR", x)) { 
+      df %<>% dplyr::full_join(data_grp_conc %>% dplyr::select(experiment, !!!grp, GRmax, GR_AOC) ) 
+      if(grepl("bi_fit", x)) {
+        df %<>%
+          dplyr::mutate(GEC50_1 = 10^log10_GEC50_1,
+                        GEC50_2 = 10^log10_GEC50_2)# %>%
+          #dplyr::mutate(GR50 = GEC50*((1-GRinf)/(0.5-GRinf) - 1)^(1/h_GR) ) %>%
+          #dplyr::mutate(log10_GR50 = log10(GR50) )
+        # df %<>%
+        #   ### notes: what about log_IC50 and log_EC50? ask Marc.
+        #   dplyr::mutate(GEC50_1 = ifelse(fit == "flat", 0, GEC50_1),
+        #                 GEC50_2 = ifelse(fit == "flat", 0, GEC50_2),
+        #                 GRinf_1 = ifelse(fit == "flat", GRmax, GRinf_1),
+        #                 GRinf_2 = ifelse(fit == "flat", GRmax, GRinf_2),
+        #                 ### note: does the second ifelse statement work correctly here?
+        #                 GR50 = ifelse(fit == "flat", ifelse(flat > .5, Inf, -Inf) , GR50),
+        #                 h_GR_1 = ifelse(fit == "flat", 0.01, h_GR_1),
+        #                 h_GR_2 = ifelse(fit == "flat", 0.01, h_GR_2)
+        #   )
+      } else {
+        df %<>%
+          dplyr::mutate(GEC50 = 10^log10_GEC50) %>%
+          dplyr::mutate(GR50 = GEC50*((1-GRinf)/(0.5-GRinf) - 1)^(1/h_GR) ) %>%
+          dplyr::mutate(log10_GR50 = log10(GR50) )
+        ## adjust parameters for flat fits
+        # df %<>%
+        #   ### notes: what about log_GR50 and log_GEC50? ask Marc.
+        #   dplyr::mutate(GEC50 = ifelse(fit == "flat", 0, GEC50),
+        #                 GRinf = ifelse(fit == "flat", GRmax, GRinf),
+        #                 ### note: does the second ifelse statement work correctly here?
+        #                 GR50 = ifelse(fit == "flat", ifelse(flat > .5, Inf, -Inf) , GR50),
+        #                 h_GR = ifelse(fit == "flat", 0.01, h_GR)
+        #                 )
+      }
+    }
+    if(grepl("_rel", x)) {
+      df %<>% dplyr::full_join(data_grp_conc %>% dplyr::select(experiment, !!!grp, Emax, AUC) )
+      if(grepl("bi_fit", x)) {
+        df %<>% 
+          dplyr::mutate(EC50_1 = 10^log10_EC50_1,
+                        EC50_2 = 10^log10_EC50_2) #%>%
+          #dplyr::mutate(IC50 = EC50*((1-Einf)/(0.5-Einf) - 1)^(1/h) ) %>%
+          #dplyr::mutate(log10_IC50 = log10(IC50) )
+        ## adjust parameters for flat fits
+        # df %<>%
+        #   ### notes: what about log_IC50 and log_EC50? ask Marc.
+        #   dplyr::mutate(EC50_1 = ifelse(fit == "flat", 0, EC50_1),
+        #                 EC50_2 = ifelse(fit == "flat", 0, EC50_2),
+        #                 Einf_1 = ifelse(fit == "flat", Emax, Einf_1),
+        #                 Einf_2 = ifelse(fit == "flat", Emax, Einf_2),
+        #                 ### note: does the second ifelse statement work correctly here?
+        #                 IC50 = ifelse(fit == "flat", ifelse(flat > .5, Inf, -Inf) , IC50),
+        #                 h_1 = ifelse(fit == "flat", 0.01, h_1),
+        #                 h_2 = ifelse(fit == "flat", 0.01, h_2)
+        #   )
+      } else {
+        df %<>% 
+          dplyr::mutate(EC50 = 10^log10_EC50) %>%
+          dplyr::mutate(IC50 = EC50*((1-Einf)/(0.5-Einf) - 1)^(1/h) ) %>%
+          dplyr::mutate(log10_IC50 = log10(IC50) )
+        ## adjust parameters for flat fits
+        # df %<>%
+        #   ### notes: what about log_IC50 and log_EC50? ask Marc.
+        #   dplyr::mutate(EC50 = ifelse(fit == "flat", 0, EC50),
+        #                 Einf = ifelse(fit == "flat", Emax, Einf),
+        #                 ### note: does the second ifelse statement work correctly here?
+        #                 IC50 = ifelse(fit == "flat", ifelse(flat > .5, Inf, -Inf) , IC50),
+        #                 h = ifelse(fit == "flat", 0.01, h)
+        #   )
+      }
+    }
+    ## Get RSS1 
+    if(grepl("_GR", x)) { df$RSS1 = data_grp_summ$RSS1_GR }
+    if(grepl("_rel", x)) { df$RSS1 = data_grp_summ$RSS1_rel_cell }
+    ## Get RSS2
     df$RSS2 = sapply(data_grp_summ[[x]], function(y) { 
       if(!class(y) == "try-error") { y$value } else { NA }
     })
     Npara_flat = 1
     Npara = length(params)
-    df1 = Npara - Npara_flat
-    df$df2 =  sapply(data_grp_summ$GRvalue, function(y) return(length(na.omit(y)) - Npara + 1) )
-    df$f_value = with(df, ( (RSS1 - RSS2)/df1 )/(RSS2/df2) )
+    df$df1 = Npara_flat
+    df$df2 = Npara
+    df$n =  sapply(data_grp_summ$GRvalue, function(y) return(length(na.omit(y))) )
+    ## note: f_value same as before, just expressed differently
+    df$f_value = with(df, ( (RSS1 - RSS2)/(df2 - df1) )/(RSS2/(n - df2) ) )
     df$f_pval = with(df, stats::pf(f_value, df1, df2, lower.tail = FALSE) )
+    ## note: RSS1 = residual sum of squares of flat fit = total sum of squares
+    df$R_square = with(df, 1 - RSS2/RSS1 )
     
-    pcutoff = ifelse(force == FALSE, .05 , 1)
+    df$pcutoff = ifelse(force == FALSE, .05 , 1)
     # Flat or sigmoid fit for GR curve
     df$fit = sapply(1:length(df$f_pval), function(i) {
       pval = df$f_pval[i]
@@ -354,6 +397,17 @@
         return("curve")
       }
     })
+    
+    ### select columns to keep
+    # df = df[,c('GR50', 'log10_GR50','GRmax','GR_AOC','GEC50', 'log10_GEC50',
+    #            'GRinf','h_GR','r2_GR','pval_GR', 'fit_GR','flat_fit_GR', 
+    #            'IC50', 'log10_IC50','Emax', 'AUC', 'EC50', 'log10_EC50',
+    #            'Einf', 'h', 
+    #            "Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2",
+    #            'r2_rel_cell', 'pval_rel_cell', 'fit_rel_cell',
+    #            'flat_fit_rel_cell','experiment',
+    #            'concentration_points', 'ctrl_cell_doublings')]
+    
     if(grepl("_GR", x)) { df$flat = data_grp_summ$GR_mean }
     if(grepl("_rel", x)) { df$flat = data_grp_summ$rel_cell_mean }
     
@@ -367,308 +421,8 @@
     if(x == "sig_high_fit_rel") { parameters$rel_cell$sigmoid$high = df }
     if(x == "bi_fit_rel") { parameters$rel_cell$biphasic$normal = df }
   }
-  ## temporary -- return parameters for curve plotting
+
   return(parameters)
-  
-  # # F-test for the significance of the sigmoidal fit
-  # Npara = 3 # N of parameters in the growth curve
-  # Npara_flat = 1 # F-test for the models
-  # RSS2 = sum(stats::residuals(output_model_new)^2, na.rm = TRUE)
-  # RSS1 = sum((data_exp$GRvalue - mean(data_exp$GRvalue, na.rm = TRUE))^2,
-  #            na.rm = TRUE)
-  # df1 = (Npara - Npara_flat)
-  # df2 = (length(na.omit(data_exp$GRvalue)) - Npara + 1)
-  # f_value = ((RSS1-RSS2)/df1)/(RSS2/df2)
-  # f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
-  # pval_GR[i] = f_pval
-  # R_square_GR[i] = 1 - RSS2/RSS1
-  #############
-  # for each "experiment" (group of data to be fitted to a curve)
-  for(i in 1:length(experiments)) {
-    # subset the data to just that experiment
-    data_exp = inputData[inputData$experiment == experiments[i], ]
-    if(!is.null(metadata)) metadata[i,] = data_exp[1,groupingVariables, drop = FALSE]
-    
-    GR_mean[i] = mean(data_exp$GRvalue, na.rm = TRUE)
-    rel_cell_mean[i] = mean(data_exp$rel_cell_count, na.rm = TRUE)
-    # calculate avg number of cell doublings in control and treated experiments
-    ctrl_cell_doublings[i] = mean(data_exp$ctrl_cell_doublings, na.rm = TRUE)
-    #===== constrained fit GR curve ============
-    #### h, Einf, EC50
-    c = unique(data_exp$concentration)
-    priors = c(2, 0.1, stats::median(c))
-    lower = c(.1, -1, min(c)*1e-2)
-    upper = c(5, 1, max(c)*1e2)
-    #===== constrained fit Relative cell count curve ============
-    priors_rel_cell = c(2, 0.1, stats::median(c))
-    lower_rel_cell = c(.1, 0, min(c)*1e-2)
-    upper_rel_cell = c(5, 1, max(c)*1e2)
-    if(dim(data_exp)[1] > 1) {
-      # GR curve fitting
-      # biphasic model fitting
-      # curve 1: a = Einf, b = log10_EC50, c = h
-      # curve 2: d = Einf, e = log10_EC50, f = h
-      #===== constrained fit biphasic curve ============
-      # ec50_low = log10(max(c(min(c) * 1e-4, 1e-7)))
-      # ec50_high = log10(min(c(max(c) * 1e2, 1e2)))
-      # cc = log10(c)
-      # p_bi = tibble::tribble(
-      #   ~parameter,                 ~lower,     ~prior,             ~upper,
-      #   "Einf_1",                     -.05,        0.1,                  1, 
-      #   "log10_GEC50_1",          ec50_low, median(cc),           log10(1),
-      #   "h_1",                       0.025,          2,                  5,
-      #   "Einf_2",                       -1,       -0.1,                0.5, 
-      #   "log10_GEC50_2",        log10(0.3),   log10(1),          ec50_high,
-      #   "h_2",                       0.025,          2,                  5
-      # )
-      # extrapolrange = 10
-      # cmin = log10(min(c)/extrapolrange)
-      # cmax = log10(max(c) * extrapolrange)
-      # xc = 10^(seq(cmin, cmax, 0.05))
-      ## Define the biphasic dose-response function
-      ## x is concentration, p is the parameter vector
-      opfct_bi = function(x, p) {
-        term1 = 1 + (p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3]))
-        term2 = 1 + (p[4] + (1 - p[4])/(1 + (x / (10^p[5])) ^ p[6]))
-        2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
-      }
-      ## Define the sigmoidal (or logistic) dose-response function
-      opfct_sig = function(x, p) {
-        p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
-      }
-      yexp_bi = data_exp$GRvalue
-      ## Define the residual sum of squares function
-      sum_square_bi = function(x, y, p) {sum((y - opfct_bi(x, p))^2)}
-      sum_square_sig = function(x, y, p) {sum((y - opfct_sig(x, p))^2)}
-      ## Find optimal parameters to fit biphasic dose-response curve
-      bi_controls = list(maxit = 500)
-      bi_fit = try(optim(par = p_bi$prior, 
-                  function(p, x, y) sum_square_bi(x = data_exp$concentration, y = yexp_bi, p),
-                  hessian = TRUE, method = "L-BFGS-B", control = bi_controls,
-                  lower = p_bi$lower, upper = p_bi$upper))
-      sig_fit_low = try(optim(par = p_bi$prior[1:3], 
-                  function(p, x, y) sum_square_sig(x = data_exp$concentration, y = yexp_bi, p),
-                  hessian = TRUE, method = "L-BFGS-B", control = bi_controls,
-                  lower = p_bi$lower[1:3], upper = p_bi$upper[1:3]))
-      sig_fit_high = try(optim(par = p_bi$prior[4:6], 
-                  function(p, x, y) sum_square_sig(x = data_exp$concentration, y = yexp_bi, p),
-                  hessian = TRUE, method = "L-BFGS-B", control = bi_controls,
-                  lower = p_bi$lower[4:6], upper = p_bi$upper[4:6]))
-      # nls_sig <- try(optim(par = priors[c(2, 3, 1)], 
-      #             function(p, x, y) min_func_sig(x = data_exp$concentration, y = yexp_bi, p),
-      #             hessian = TRUE, method = "L-BFGS-B", 
-      #             lower = lower[c(2, 3, 1)], upper = upper[c(2, 3, 1)]))
-      ### get biphasic fit parameters
-      if(class(bi_fit) != "try-error") {
-        Npara = 6
-        ## Get sum of squares for biphasic fit
-        RSS = bi_fit$value
-        #sst = np.sum([(yt - np.mean(ytrue))**2  for yt in ytrue])
-        #sse = get_sse(ypred, ytrue)
-        #rsquare = 1 - (sse/sst)
-        ## Get fitted parameters for biphasic function
-        params_bi[i,] = bi_fit$par #%>% magrittr::set_names(p_bi$parameter)
-      } else {
-        params_bi[i,] = rep(NA, 6) #%>% magrittr::set_names(p_bi$parameter)
-      }
-      if(class(bi_fit) != "try-error") {
-        Npara = 6
-        ## Get sum of squares for biphasic fit
-        RSS = bi_fit$value
-        #sst = np.sum([(yt - np.mean(ytrue))**2  for yt in ytrue])
-        #sse = get_sse(ypred, ytrue)
-        #rsquare = 1 - (sse/sst)
-        ## Get fitted parameters for biphasic function
-        params_bi[i,] = bi_fit$par #%>% magrittr::set_names(p_bi$parameter)
-      } else {
-        params_bi[i,] = rep(NA, 6) #%>% magrittr::set_names(p_bi$parameter)
-      }
-      # logistic model fitting
-      output_model_new = try(drc::drm(
-        GRvalue~log10_concentration, experiment, data=data_exp, logDose = 10,
-        fct=drc::LL.3u(names=c('h_GR','GRinf','GEC50')), start = priors,
-        lowerl = lower, upperl = upper, control = controls,
-        na.action = na.omit))
-      if(class(output_model_new) == "drc" && 
-         !is.null(stats::coef(output_model_new)) && 
-         !is.null(stats::residuals(output_model_new))
-         ) {
-        params_GR[i,] = c(as.numeric(stats::coef(output_model_new)))
-        # F-test for the significance of the sigmoidal fit
-        Npara = 3 # N of parameters in the growth curve
-        Npara_flat = 1 # F-test for the models
-        RSS2 = sum(stats::residuals(output_model_new)^2, na.rm = TRUE)
-        RSS1 = sum((data_exp$GRvalue - mean(data_exp$GRvalue, na.rm = TRUE))^2,
-                   na.rm = TRUE)
-        df1 = (Npara - Npara_flat)
-        df2 = (length(na.omit(data_exp$GRvalue)) - Npara + 1)
-        f_value = ((RSS1-RSS2)/df1)/(RSS2/df2)
-        f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
-        pval_GR[i] = f_pval
-        R_square_GR[i] = 1 - RSS2/RSS1
-      } else {
-        params_GR[i,] = NA
-        pval_GR[i] = NA
-        R_square_GR[i] = NA
-      }
-      # Relative cell count curve fitting
-      output_model_new_rel_cell = try(drc::drm(
-        rel_cell_count~log10_concentration, experiment, data=data_exp, logDose = 10,
-        fct=drc::LL.3u(names=c('h','Einf','EC50')), start = priors_rel_cell,
-        lowerl = lower_rel_cell, upperl = upper_rel_cell, control = controls,
-        na.action = na.omit))
-      if(class(output_model_new_rel_cell) == "drc" && 
-         !is.null(stats::coef(output_model_new_rel_cell)) && 
-         !is.null(stats::residuals(output_model_new_rel_cell))
-         ) {
-        params_trad[i,] = c(as.numeric(stats::coef(output_model_new_rel_cell)))
-        # F-test for the significance of the sigmoidal fit
-        Npara = 3 # N of parameters in the growth curve
-        Npara_flat = 1 # F-test for the models
-        RSS2 = sum(stats::residuals(output_model_new_rel_cell)^2, na.rm = TRUE)
-        RSS1 = sum((data_exp$rel_cell_count - mean(data_exp$rel_cell_count,
-                   na.rm = TRUE))^2, na.rm = TRUE)
-        df1 = (Npara - Npara_flat)
-        df2 = (length(na.omit(data_exp$rel_cell_count)) - Npara + 1)
-        f_value = ((RSS1-RSS2)/df1)/(RSS2/df2)
-        f_pval = stats::pf(f_value, df1, df2, lower.tail = FALSE)
-        pval_rel_cell[i] = f_pval
-        R_square_rel_cell[i] = 1 - RSS2/RSS1
-      } else {
-        params_trad[i,] = NA
-        pval_rel_cell[i] = NA
-        R_square_rel_cell[i] = NA
-      }
-    }
-    GR_drc_list[[i]] = output_model_new
-    trad_drc_list[[i]] = output_model_new_rel_cell
-    
-    #==================================
-
-    # Trapezoid rule for integration of GR_AOC
-    GRavg = NULL
-    rel_cell_avg = NULL
-    
-    concs = sort(unique(data_exp$concentration))
-    l = length(concs)
-    concentration_points[i] = l
-    
-    for(j in 1:l) {
-      data_trapz = data_exp[data_exp$concentration == concs[j],]
-      GRavg[j] = mean(data_trapz$GRvalue, na.rm = TRUE)
-      rel_cell_avg[j] = mean(data_trapz$rel_cell_count, na.rm = TRUE)
-    }
-    
-    GRmax[i] = min(GRavg[c(l,l-1)], na.rm = TRUE)
-    Emax[i] = min(rel_cell_avg[c(l,l-1)], na.rm = TRUE)
-    
-    diff_vector = diff(log10(concs), lag = 1)
-    conc_range = log10(concs[length(concs)]) - log10(concs[1])
-    AOC[i] = sum((1 - (GRavg[1:(length(GRavg)-1)]+GRavg[2:length(GRavg)])/2)*
-                   diff_vector, na.rm = TRUE)/conc_range
-    AUC[i] = sum(((rel_cell_avg[1:(length(rel_cell_avg)-1)]+rel_cell_avg[2:length(rel_cell_avg)])/2)*
-                   diff_vector, na.rm = TRUE)/conc_range
-  }
-
-  parameters = cbind(params_GR, params_trad, params_bi)
-  parameters$ctrl_cell_doublings = ctrl_cell_doublings
-  parameters$concentration_points = concentration_points
-  # Calculate GR50 from parameters
-  parameters$GR50 = with(parameters,GEC50*((1-GRinf)/(0.5-GRinf) - 1)^(1/h_GR))
-  parameters$GRmax = GRmax
-  parameters$GR_AOC = AOC
-  parameters$r2_GR = R_square_GR
-  # Calculate IC50 from parameters
-  parameters$IC50 = with(parameters,EC50*((1-Einf)/(0.5-Einf) - 1)^(1/h))
-  parameters$Emax = Emax
-  parameters$AUC = AUC
-  parameters$r2_rel_cell = R_square_rel_cell
-  
-  if(is.null(pval_GR)) {pval_GR = NA}
-  if(is.null(pval_rel_cell)) {pval_rel_cell = NA}
-  parameters$pval_GR = pval_GR
-  parameters$pval_rel_cell = pval_rel_cell
-  # Re-order rows to match reference_output
-  parameters$experiment = experiments
-  # Threshold for F-test pval_GR
-  pcutoff = ifelse(force == FALSE, .05 , 1)
-  for(i in 1:dim(parameters)[1]) {
-    # Flat or sigmoid fit for GR curve
-    if(!is.na(parameters$pval_GR[i])) {
-      parameters$fit_GR[i] = ifelse(parameters$pval_GR[i] >= pcutoff |
-                                 is.na(parameters$GEC50[i]), "flat","sigmoid")
-    } else {
-      parameters$fit_GR[i] = ifelse(is.na(parameters$GEC50[i]), "flat",
-                                    "sigmoid")
-    }
-    # Flat or sigmoid fit for relative cell count curve
-    if(!is.na(parameters$pval_rel_cell[i])) {
-      parameters$fit_rel_cell[i] = ifelse(parameters$pval_rel_cell[i] >= pcutoff |
-                                      is.na(parameters$EC50[i]), "flat",
-                                    "sigmoid")
-    } else {
-      parameters$fit_rel_cell[i] = ifelse(is.na(parameters$EC50[i]), "flat",
-                                    "sigmoid")
-    }
-  }
-  # changed to above code to deal with NAs
-  # Add values for flat fits: GEC50 = 0, h_GR = 0.01 and GR50 = +/- Inf
-  
-  parameters$flat_fit_GR = GR_mean
-  parameters$flat_fit_rel_cell = rel_cell_mean
-  for(i in 1:dim(parameters)[1]) {
-    if(parameters$fit_GR[i] == "flat") {
-      parameters$GEC50[i] = 0
-      parameters$h_GR[i] = 0.01
-      parameters$GR50[i] = ifelse(parameters$flat_fit_GR[i] > .5, Inf, -Inf)
-      parameters$GRinf[i] = parameters$GRmax[i]
-    }
-  }
-  for(i in 1:dim(parameters)[1]) {
-    if(parameters$fit_rel_cell[i] == "flat") {
-      parameters$EC50[i] = 0
-      parameters$h[i] = 0.01
-      parameters$IC50[i] = ifelse(parameters$flat_fit_rel_cell[i] > .5, Inf, -Inf)
-      parameters$Einf[i] = parameters$Emax[i]
-    }
-  }
-  # Add GR50 = +/-Inf for any curves that don't reach GR = 0.5
-  for(i in 1:dim(parameters)[1]) {
-    if(is.na(parameters$GR50[i])) {
-      parameters$GR50[i] = ifelse(parameters$flat_fit_GR[i] > .5, Inf, -Inf)
-    }
-    if(is.na(parameters$IC50[i])) {
-      parameters$IC50[i] = ifelse(parameters$flat_fit_rel_cell[i] > .5, Inf, -Inf)
-    }
-  }
-  for(i in 1:dim(parameters)[1]) {
-    if(parameters$fit_GR[i] == "sigmoid") {
-      parameters$flat_fit_GR[i] = NA
-    }
-    if(parameters$fit_rel_cell[i] == "sigmoid") {
-      parameters$flat_fit_rel_cell[i] = NA
-    }
-  }
-  
-  # add log10 version of EC50, GEC50, etc.
-  parameters$log10_GR50 = log10(parameters$GR50)
-  parameters$log10_GEC50 = log10(parameters$GEC50)
-  parameters$log10_IC50 = log10(parameters$IC50)
-  parameters$log10_EC50 = log10(parameters$EC50)
-  
-  parameters = parameters[,c('GR50', 'log10_GR50','GRmax','GR_AOC','GEC50', 'log10_GEC50',
-                             'GRinf','h_GR','r2_GR','pval_GR', 'fit_GR','flat_fit_GR', 
-                             'IC50', 'log10_IC50','Emax', 'AUC', 'EC50', 'log10_EC50',
-                             'Einf', 'h', 
-                             "Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2",
-                             'r2_rel_cell', 'pval_rel_cell', 'fit_rel_cell',
-                             'flat_fit_rel_cell','experiment',
-                             'concentration_points', 'ctrl_cell_doublings')]
-  if(!is.null(metadata)) {
-    parameters = cbind(metadata, parameters)
-  }
-  return(list(parameters = as.data.frame(parameters), 
-              GR_drc_list = GR_drc_list, trad_drc_list = trad_drc_list))
 }
 
 .GRlogistic_3u = function(c, GRinf, GEC50, h_GR){
