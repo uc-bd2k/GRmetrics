@@ -38,14 +38,14 @@
 
 .GRlogisticFit = function(inputData, groupingVariables, force = FALSE,
                           cap = FALSE) {
-  if(length(groupingVariables) > 0) {
-    metadata = matrix(data = NA, ncol = length(groupingVariables),
-                      nrow = length(experiments))
-    metadata = as.data.frame(metadata)
-    colnames(metadata) = groupingVariables
-  } else {
-    metadata = NULL
-  }
+  # if(length(groupingVariables) > 0) {
+  #   metadata = matrix(data = NA, ncol = length(groupingVariables),
+  #                     nrow = length(experiments))
+  #   metadata = as.data.frame(metadata)
+  #   colnames(metadata) = groupingVariables
+  # } else {
+  #   metadata = NULL
+  # }
 
   grp = dplyr::syms(groupingVariables)
   data_grp = inputData %>% dplyr::group_by(experiment, !!!grp)
@@ -94,8 +94,8 @@
       AUC = caTools::trapz(x = cc, y = rel_cell_mean) ) %>%
     dplyr::ungroup()
   
-  data_grp_conc = data_grp_conc_all %>% 
-    dplyr::full_join(data_grp_conc_max, by = c("experiment", groupingVariables) )
+  data_grp_conc = suppressMessages(dplyr::full_join(data_grp_conc_all, data_grp_conc_max, 
+                                                    by = c("experiment", groupingVariables) ) )
   
   data_grp_summ %<>% dplyr::group_by(experiment, !!!grp) %>%
     dplyr::mutate(
@@ -299,7 +299,8 @@
     df = cbind(df, vals)
     ## Get GRmax (Emax) and GR_AOC (AUC)
     if(grepl("_GR", x)) { 
-      df %<>% dplyr::full_join(data_grp_conc %>% dplyr::select(experiment, !!!grp, GRmax, GR_AOC) ) 
+      df =  suppressMessages(dplyr::full_join(df, data_grp_conc %>% dplyr::select(experiment, !!!grp, GRmax, GR_AOC),
+                                              by = c("experiment", groupingVariables) ))
       if(grepl("bi_fit", x)) {
         df %<>%
           dplyr::mutate(GEC50_1 = 10^log10_GEC50_1,
@@ -334,7 +335,8 @@
       }
     }
     if(grepl("_rel", x)) {
-      df %<>% dplyr::full_join(data_grp_conc %>% dplyr::select(experiment, !!!grp, Emax, AUC) )
+      df = suppressMessages(dplyr::full_join(df, data_grp_conc %>% dplyr::select(experiment, !!!grp, Emax, AUC),
+                                             by = c("experiment", groupingVariables) ) )
       if(grepl("bi_fit", x)) {
         df %<>% 
           dplyr::mutate(EC50_1 = 10^log10_EC50_1,
@@ -387,16 +389,9 @@
     ## note: RSS1 = residual sum of squares of flat fit = total sum of squares
     df$R_square = with(df, 1 - RSS2/RSS1 )
     
-    df$pcutoff = ifelse(force == FALSE, .05 , 1)
+    pcutoff = ifelse(force == FALSE, .05 , 1)
     # Flat or sigmoid fit for GR curve
-    df$fit = sapply(1:length(df$f_pval), function(i) {
-      pval = df$f_pval[i]
-      if(is.na(pval) || pval > pcutoff) { 
-        return("flat")
-      } else {
-        return("curve")
-      }
-    })
+    df %<>% dplyr::mutate(fit = ifelse(f_pval > pcutoff | is.na(f_pval), "flat", "curve" ))
     
     ### select columns to keep
     # df = df[,c('GR50', 'log10_GR50','GRmax','GR_AOC','GEC50', 'log10_GEC50',

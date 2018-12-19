@@ -66,10 +66,19 @@
 #' pointColor = 'cell_line', wilA = "BT20", wilB = c("MCF7","MCF10A"))
 #' @export
 
-GRbox <- function(fitData, metric, groupVariable, pointColor,
+GRbox <- function(fitData, metric = c("GR", "rel_cell"),
+                  parameter = "GR50", groupVariable, pointColor, fit = "sigmoid",
                   factors = "all", wilA = NULL, wilB = NULL, plotly = TRUE) {
-  data = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
-               t(SummarizedExperiment::assay(fitData)))
+  # data = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
+  #              t(SummarizedExperiment::assay(fitData)))
+  metric = metric[1]
+  parameter_list = GRmetrics::GRgetMetrics(fitData)[[metric]]
+  if(fit == "sigmoid") { parameterTable =  parameter_list$sigmoid$normal }
+  if(fit == "sigmoid_high") { parameterTable =  parameter_list$sigmoid$high }
+  if(fit == "sigmoid_low") { parameterTable =  parameter_list$sigmoid$low }
+  if(fit == "biphasic") { parameterTable =  parameter_list$biphasic$normal }
+
+  data = parameterTable
   #bottom_margin = max(nchar(data[[groupVariable]]), na.rm = TRUE)
   data[[groupVariable]] = factor(data[[groupVariable]])
   if(!identical(factors, "all")) {
@@ -82,24 +91,24 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
   if(length(intersect(wilA, wilB)) > 0) {
     stop('wilA and wilB must not overlap.')
   }
-  if(metric == "GR50") {
-    data$`log10(GR50)` = log10(data$GR50)
-    metric = "log10(GR50)"
+  if(parameter == "GR50") {
+    #data$`log10(GR50)` = log10(data$GR50)
+    parameter = "log10_GR50"
   }
-  if(metric == "IC50") {
-    data$`log10(IC50)` = log10(data$IC50)
-    metric = "log10(IC50)"
+  if(parameter == "IC50") {
+    #data$`log10(IC50)` = log10(data$IC50)
+    parameter = "log10_IC50"
   }
-  if(metric == "h_GR") {
+  if(parameter == "h_GR") {
     data$`log2(h_GR)` = log2(data$h_GR)
-    metric = "log2(h_GR)"
+    parameter = "log2(h_GR)"
   }
-  if(metric == "h") {
+  if(parameter == "h") {
     data$`log2(h)` = log2(data$h)
-    metric = "log2(h)"
+    parameter = "log2(h)"
   }
   # Get rid of infinite values
-  fin = is.finite(data[[metric]])
+  fin = is.finite(data[[parameter]])
   data = data[fin,]
   if(!is.null(wilA) & !is.null(wilB)) {
     for(i in 1:length(wilB)) {
@@ -111,20 +120,20 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
     # Perform Wilcoxon rank sum test
     rowsA = data[[groupVariable]] %in% wilA
     rowsB = data[[groupVariable]] %in% wilB
-    wil_dataA = data[rowsA,metric]
-    wil_dataB = data[rowsB,metric]
-    wil = stats::wilcox.test(x = wil_dataA, y = wil_dataB,
-                             alternative = "less")
+    wil_dataA = data[rowsA,parameter]
+    wil_dataB = data[rowsB,parameter]
+    #wil = stats::wilcox.test(x = wil_dataA, y = wil_dataB,alternative = "less")
+    wil = wilcox.test(x = wil_dataA, y = wil_dataB, alternative = "two.sided")
     wil_pval = prettyNum(wil$p.value, digits = 2)
   }
   if(plotly == TRUE) {
     p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
-                          y = metric, text = 'experiment'))
+                          y = parameter, text = 'experiment'))
     p = p + ggplot2::geom_boxplot(ggplot2::aes_string(fill = groupVariable,
                   alpha = 0.3), outlier.color = NA, show.legend = FALSE) +
       ggplot2::geom_jitter(width = 0.5, show.legend = FALSE,
       ggplot2::aes_string(colour = pointColor)) +
-      ggplot2::xlab('') + ggplot2::ylab(metric)
+      ggplot2::xlab('') + ggplot2::ylab(parameter)
     q = plotly::plotly_build(p)
     # Last CRAN version of plotly (3.6.0) uses "q$"
     # Latest github version of plotly (4.3.5) uses "q$x"
@@ -236,12 +245,12 @@ GRbox <- function(fitData, metric, groupVariable, pointColor,
     
   } else {
     p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
-                                                   y = metric))
+                                                   y = parameter))
     p = p + ggplot2::geom_boxplot(ggplot2::aes_string(
       fill = groupVariable, alpha = 0.3), outlier.color = NA,
       show.legend = FALSE) + ggplot2::geom_jitter(
         width = 0.5, ggplot2::aes_string(colour = pointColor)) +
-      ggplot2::xlab('') + ggplot2::ylab(metric) +
+      ggplot2::xlab('') + ggplot2::ylab(parameter) +
       ggplot2::theme_grey(base_size = 14) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, 
                                                          vjust = 1, hjust=1))

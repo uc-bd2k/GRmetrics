@@ -273,11 +273,11 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   # add error bars to the plot
   bar_width = 0
   if(bars == "sd") {
-    p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, 
+    p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, y = y_val_mean,
               ymin = y_val_mean - y_val_sd, ymax = y_val_mean + y_val_sd, 
               colour = !!color, group = experiment), width = bar_width)
   } else if(bars == "se") {
-    p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, 
+    p = p + ggplot2::geom_errorbar(data = data_mean, ggplot2::aes(x = log10_concentration, y = y_val_mean,
                ymin = y_val_mean - y_val_se, ymax = y_val_mean + y_val_se, 
                colour = !!color, group = experiment), width = bar_width)
   }
@@ -310,9 +310,9 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   # add rugs to plot
   rug_size = 1.1
   if(xrug != "none") p = p + ggplot2::geom_rug(data = parameterTable,
-    ggplot2::aes_string(x = paste0("log10_", xrug), colour = "experiment"), size = rug_size)
+    ggplot2::aes_string(x = paste0("log10_", xrug), colour = color, group = "experiment"), size = rug_size)
   if(yrug != "none") p = p + ggplot2::geom_rug(data = parameterTable,
-    ggplot2::aes_string(y = yrug, colour = "experiment"), size = rug_size)
+    ggplot2::aes_string(y = yrug, colour = color, group = "experiment"), size = rug_size)
   ### alternative way to do the rug... allows for length control (good), but xrug and yrug 
   ### can look like different lengths on the screen (bad)
   # rug_len = 0.25

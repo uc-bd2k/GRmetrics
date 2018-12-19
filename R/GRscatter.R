@@ -49,7 +49,8 @@
 #' GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB',
 #' plotly = FALSE)
 
-GRscatter = function(fitData, metric, variable, xaxis, yaxis, plotly = TRUE){
+GRscatter = function(fitData, metric = c("GR", "rel_cell"), parameter = "GR50",
+                     variable, xaxis, yaxis, plotly = TRUE){
   if(length(xaxis) != length(yaxis)) {
     if(length(xaxis) == 1) {
       xaxis = rep(xaxis, length(yaxis))
@@ -60,20 +61,31 @@ GRscatter = function(fitData, metric, variable, xaxis, yaxis, plotly = TRUE){
            length 1')
     }
   }
-  data = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
-              t(SummarizedExperiment::assay(fitData)))
-  if(metric == 'GR50') {
-    data$log10GR50 = log10(data$GR50)
-    metric = 'log10GR50'
-  } else if(metric == 'IC50') {
-    data$log10IC50 = log10(data$IC50)
-    metric = 'log10IC50'
-  } else if(metric == 'h_GR') {
-    data$`log2h_GR` = log2(data$h_GR)
-    metric = 'log2h_GR'
-  } else if(metric == 'h') {
-    data$log2h = log2(data$h)
-    metric = 'log2h'
+  # data = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
+  #             t(SummarizedExperiment::assay(fitData)))
+  metric = metric[1]
+  parameter_list = GRmetrics::GRgetMetrics(fitData)[[metric]]
+  if(fit == "sigmoid") { parameterTable =  parameter_list$sigmoid$normal }
+  if(fit == "sigmoid_high") { parameterTable =  parameter_list$sigmoid$high }
+  if(fit == "sigmoid_low") { parameterTable =  parameter_list$sigmoid$low }
+  if(fit == "biphasic") { parameterTable =  parameter_list$biphasic$normal }
+  data = parameterTable
+  
+  if(parameter == "GR50") {
+    #data$`log10(GR50)` = log10(data$GR50)
+    parameter = "log10_GR50"
+  }
+  if(parameter == "IC50") {
+    #data$`log10(IC50)` = log10(data$IC50)
+    parameter = "log10_IC50"
+  }
+  if(parameter == "h_GR") {
+    data$`log2(h_GR)` = log2(data$h_GR)
+    parameter = "log2(h_GR)"
+  }
+  if(parameter == "h") {
+    data$`log2(h)` = log2(data$h)
+    parameter = "log2(h)"
   }
   all_data = NULL
   for(i in 1:length(xaxis)) {
@@ -94,8 +106,8 @@ GRscatter = function(fitData, metric, variable, xaxis, yaxis, plotly = TRUE){
     all_data = rbind(all_data, merge_data)
   }
 
-  x_data = paste0(metric,'.x')
-  y_data = paste0(metric,'.y')
+  x_data = paste0(parameter,'.x')
+  y_data = paste0(parameter,'.y')
 
   ## Get rid of infinite values
   test_finite_x = which(is.finite( all_data[[x_data]] ))
@@ -126,26 +138,26 @@ GRscatter = function(fitData, metric, variable, xaxis, yaxis, plotly = TRUE){
     ggplot2::scale_y_continuous(limits = c(all_min, all_max)) +
     ggplot2::coord_fixed()
 
-  if(metric == 'log10GR50') {
+  if(parameter == 'log10_GR50') {
     p = p + ggplot2::ggtitle("GR50 Scatterplot (log10)") +
       ggplot2::labs(colour = "") + ggplot2::xlab("log10(GR50)") +
       ggplot2::ylab("log10(GR50)")
-  } else if(metric == 'log10IC50') {
+  } else if(parameter == 'log10_IC50') {
     p = p + ggplot2::ggtitle("IC50 Scatterplot (log10)") +
       ggplot2::labs(colour = "") + ggplot2::xlab("log10(IC50)") +
       ggplot2::ylab("log10(IC50)")
-  } else if(metric == 'log2h_GR') {
+  } else if(parameter == 'log2_h_GR') {
     p = p + ggplot2::ggtitle("Hill Slope (h_GR) Scatterplot (log2)") +
       ggplot2::labs(colour = "") + ggplot2::xlab("log2(h_GR)") +
       ggplot2::ylab("log2(h_GR)")
-  } else if(metric == 'log2h') {
+  } else if(parameter == 'log2h') {
     p = p + ggplot2::ggtitle("Hill Slope (h) Scatterplot (log2)") +
       ggplot2::labs(colour = "") + ggplot2::xlab("log2(h)") +
       ggplot2::ylab("log2(h)")
   } else {
-    p = p + ggplot2::ggtitle(paste(metric, "Scatterplot")) +
-      ggplot2::labs(colour = "") + ggplot2::xlab(metric) +
-      ggplot2::ylab(metric)
+    p = p + ggplot2::ggtitle(paste(parameter, "Scatterplot")) +
+      ggplot2::labs(colour = "") + ggplot2::xlab(parameter) +
+      ggplot2::ylab(parameter)
   }
   if(plotly == TRUE) {
     q = plotly::ggplotly(p)
