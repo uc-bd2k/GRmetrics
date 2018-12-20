@@ -15,7 +15,7 @@ URL: https://github.com/uc-bd2k/GRmetrics
 BugReports: https://github.com/uc-bd2k/GRmetrics/issues
 LazyData: TRUE
 Depends: R (>= 3.3), SummarizedExperiment, ggplot2, plotly
-Imports: drc, S4Vectors, ggsci, lemon, assertthat, dplyr, magrittr, purrr, caTools
+Imports: drc, S4Vectors, ggsci, lemon, assertthat, dplyr, magrittr, purrr, caTools, cowplot
 RoxygenNote: 6.1.0
 Suggests: knitr, rmarkdown, BiocStyle
 VignetteBuilder: knitr
