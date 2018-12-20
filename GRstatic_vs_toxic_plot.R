@@ -1,4 +1,4 @@
-.GRdrawSvT = function(inputData, groupingVariable,) {
+.GRdrawSvT = function(inputData, groupingVariables) {
   #df = inputData %>% dplyr::group_by(CellLine, pert_type, DrugName)
   df = inputData %>%
     reshape2::melt(id.vars = c("CellLine", "pert_type", "DrugName", "Conc"),
@@ -11,8 +11,9 @@
     dplyr::mutate(exp = paste(CellLine, pert_type, DrugName)) %>%
     dplyr::filter(Conc > 0) %>%
     dplyr::filter(variable %in% c(GR_d, GR_s))
-  ggplot2::ggplot(df) + 
+  g = ggplot2::ggplot(df) + 
     ggplot2::geom_point(aes(x = log10(Conc), y = value, colour = variable, group = exp)) + 
     #ggplot2::theme(legend.position = "none") + 
     ggplot2::facet_wrap(~exp)
+  return(g)
 }

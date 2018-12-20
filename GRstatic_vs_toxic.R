@@ -26,18 +26,18 @@
     warning(msg)
   }
   
-  # Transform time to days for normalization of GR_d
-  if(max(inputData$Time, na.rm = TRUE) > 14) {
-    inputData %<>% dplyr::mutate( Time = Time/24 )
-    warning("Time transformed to days for normalization of GR_d")
-  }
+  # Transform time to days for normalization of GR_d #### change this to time = "days" or "hours" # default = not changing
+  # if(max(inputData$Time, na.rm = TRUE) > 14) {
+  #   inputData %<>% dplyr::mutate( Time = Time/24 )
+  #   warning("Time transformed to days for normalization of GR_d")
+  # }
   ### how should we treat NAs here?? na.rm or not?
   inputData %<>% dplyr::mutate(
     # Dratio = (increase in dead cells, maxed out at 100%)/(increase in alive cells)
     Dratio = pmax(Deadcount - Day0DeadCnt, 1, na.rm = T)/(Cellcount - Day0Cnt),
     Dratio_ctrl = pmax(Ctrl_Deadcount - Day0DeadCnt, 1, na.rm = T)/(Ctrlcount - Day0Cnt),
     gr = log2(Cellcount/Day0Cnt),
-    gr_ctrl = log2(Ctrlcount/Day0Cnt),
+    gr_ctrl = log2(Ctrlcount/Day0Cnt)
     )
   ## These are slightly different from the formulas in the slide-deck, which are correct?
   inputData %<>% dplyr::mutate(
