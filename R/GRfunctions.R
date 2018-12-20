@@ -490,7 +490,7 @@
       initial_count = FALSE
     }
   }
-  if(case == "C") {
+  if(case == "B") {
     # check for correct input columns
     if(length(intersect(colnames(inputData), c('concentration', 'cell_count',
                                                'time'))) != 3) {
@@ -520,7 +520,7 @@
 .convert = function(inputData, case, initial_count) {
   if(case == "A") {
       return(inputData)
-  } else if(case == "C") {
+  } else if(case == "B") {
     delete_cols = which(colnames(inputData) %in% c('concentration',
                                                    'cell_count'))
     keys = colnames(inputData)[-delete_cols]
