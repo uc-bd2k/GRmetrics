@@ -1,12 +1,12 @@
 Package: GRmetrics
 Type: Package
 Title: Calculate growth-rate inhibition (GR) metrics
-Version: 1.9.0
+Version: 1.9.1
 Date: 2018-07-28
 Author: Nicholas Clark
 Maintainer: Nicholas Clark <nicholas.clark00@gmail.com>, Mario Medvedovic 
         <medvedm@ucmail.uc.edu>
-biocViews: CellBasedAssays, CellBiology, Software, TimeCourse,
+biocViews: ImmunoOncology, CellBasedAssays, CellBiology, Software, TimeCourse,
         Visualization
 Description: Functions for calculating and visualizing growth-rate
         inhibition (GR) metrics.
