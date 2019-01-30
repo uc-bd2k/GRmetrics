@@ -3,6 +3,16 @@
   ### see lines 152-213 in https://github.com/datarail/DrugResponse/blob/1d0fd1898e797b74f611eb61dbd6926ac715bb83/MATLAB/import_columbus/Process_CellCountData2.m
   
   #inputData = readr::read_csv("/Users/nicholasclark/Desktop/Git/grmetrics_resources/GR_v2_all.csv")
+  ### check input
+  if(case == "static_vs_toxic") {
+    counts = c("dead_count__time0", "cell_count__time0", "cell_count", 
+               "dead_count", "dead_count__ctrl", "cell_count__ctrl")
+    if(sum(!counts %in% colnames(inputData)) != 0) {
+      missing = counts[!counts %in% colnames(inputData)]
+      missing = paste0(missing, collapse = ", ")
+      stop(paste0("Missing columns in inputData: ", missing))
+    }
+  }
   ### Note: what about NA values in dead_count and cell_count?? these will propagate currently, but we may want to set them to 0 instead?
   inputData %<>% 
     dplyr::mutate(too_few = dead_count + cell_count < .95*(cell_count__time0 + dead_count__time0)) %>%
@@ -69,4 +79,4 @@
     GR_naive = 2^(gr/gr_ctrl) - 1
   )
   return(inputData)
-}  
+}
