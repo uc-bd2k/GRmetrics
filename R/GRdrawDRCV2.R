@@ -9,14 +9,14 @@ GRdrawDRCV2 = function(fitData,
   # make all inputs length 1
   #metric = metric[1]
   points = points[1]
-  # curves = curves[1]
+  curves = curves[1]
   # bars = bars[1]
   # xrug = xrug[1]
   # yrug = yrug[1]
   # theme = theme[1]
   # palette = palette[1]
-  # plot_type = plot_type[1]
-  # output_type = output_type[1]
+  plot_type = plot_type[1]
+  output_type = output_type[1]
   #########
   # data frame for points
   fit_df = fitData$metadata$gr_table
@@ -51,22 +51,27 @@ GRdrawDRCV2 = function(fitData,
   ### what should I do with GR values with concentration zero?
   #ctrl_df = fit_df_melt %>% dplyr::filter(Conc == 0)
   grp = syms(c(id, "GR_metric"))
-  exp_sym = syms(c(group_vars, "time"))
+  #exp_sym = syms(c(group_vars, "time"))
+  exp_sym = syms(group_vars)
   if(points == "average") {
-    fit_df_melt %<>%
+    fit_df_melt_avg = fit_df_melt %>%
       dplyr::group_by(!!!grp) %>%
       dplyr::summarize(GRvalue = mean(GRvalue, na.rm = T)) %>%
       dplyr::ungroup() 
+    fit_df_melt_avg %<>%
+      dplyr::mutate(experiment = paste(!!!exp_sym)) %>%
+      dplyr::filter(concentration > 0) %>%
+      dplyr::filter(GR_metric %in% c("GR_d", "GR_s"))
   } else if(points == "all") {
     ### nothing
   } else if(points == "none") {
     ### fill in later
   }
   fit_df_melt %<>%
-    dplyr::mutate(exp = paste(!!!exp_sym)) %>%
+    dplyr::mutate(experiment = paste(!!!exp_sym)) %>%
     dplyr::filter(concentration > 0) %>%
     dplyr::filter(GR_metric %in% c("GR_d", "GR_s"))
-
+  
   min = min(fit_df_melt$concentration, na.rm = TRUE)
   max = max(fit_df_melt$concentration, na.rm = TRUE)
   # define x support for curve
@@ -114,25 +119,56 @@ GRdrawDRCV2 = function(fitData,
     dplyr::left_join(data_for_join_GR_d, by = "experiment") %>%
     dplyr::mutate(GR_metric = "GR_d")
   curve_data_all = dplyr::bind_rows(curve_data_all_GR_s, curve_data_all_GR_d)
-  n_plots = length(unique(fit_df_melt$exp))
+  n_plots = length(unique(fit_df_melt$experiment))
   if(n_plots > 25) warning("Too many plots [change warning message later]")
-  p = ggplot2::ggplot()
+  p = ggplot2::ggplot() +
+    ggplot2::geom_hline(yintercept = 0, size = 1, colour = "gray") +
+    ggplot2::geom_hline(yintercept = 1, size = 1, colour = "gray")
   if(curves == "line") {
-    p = p + ggplot2::geom_line(data = fit_df_melt, 
+    p = p + ggplot2::geom_line(data = fit_df_melt_avg, 
               ggplot2::aes(x = log10(concentration), y = GRvalue, 
-                colour = GR_metric, group = GR_metric), size = 1.1) +
-      ggplot2::facet_wrap(~exp)
+                colour = GR_metric, group = GR_metric), size = 1.1)
   } else if(curves == "sigmoid") {
     p = p + ggplot2::geom_line(data = curve_data_all, 
               ggplot2::aes(x = log10(concentration), y = GRvalue, 
-                colour = GR_metric, group = GR_metric), size = 1.1) +
-      ggplot2::facet_wrap(~experiment)
-  } else if(curves == "none") {
-    ### do nothing
+                colour = GR_metric, group = GR_metric), size = 1.1)
   }
-  g = ggplot2::ggplot(fit_df_melt) + 
-    ggplot2::geom_point(aes(x = log10(concentration), y = GRvalue, colour = GR_metric, group = exp)) + 
-    #ggplot2::theme(legend.position = "none") + 
-    ggplot2::facet_wrap(~exp)
-  return(g)
+  if(points == "average") {
+    p = p + ggplot2::geom_point(data = fit_df_melt_avg,
+              aes(x = log10(concentration), y = GRvalue, 
+                  colour = GR_metric, group = GR_metric))
+  } else if (points == "all") {
+    p = p + ggplot2::geom_point(data = fit_df_melt,
+              aes(x = log10(concentration), y = GRvalue, 
+                  colour = GR_metric, group = GR_metric))
+  }
+  # add error bars to the plot
+  # bar_width = 0
+  # if(bars == "sd") {
+  #   p = p + ggplot2::geom_errorbar(data = data_mean, 
+  #         ggplot2::aes(x = log10_concentration, y = y_val_mean,
+  #            ymin = y_val_mean - y_val_sd, ymax = y_val_mean + y_val_sd, 
+  #             colour = !!color, group = experiment), width = bar_width)
+  # } else if(bars == "se") {
+  #   p = p + ggplot2::geom_errorbar(data = data_mean, 
+  #         ggplot2::aes(x = log10_concentration, y = y_val_mean,
+  #            ymin = y_val_mean - y_val_se, ymax = y_val_mean + y_val_se, 
+  #                colour = !!color, group = experiment), width = bar_width)
+  # }
+  # set x and y range for plot, set labels, add horizontal lines
+  p = p + ggplot2::coord_cartesian(xlim = c(log10(min)-0.1,
+                                            log10(max)+0.1),
+                                   ylim = c(-1, 1.5), expand = F) +
+    ggplot2::ggtitle("Concentration vs. GR values") +
+    ggplot2::ylab('GR value')
+  #ggplot2::geom_hline(yintercept = 0.5, size = 1, linetype = "dashed") +
+  #ggplot2::geom_hline(yintercept = -1, size = 1, linetype = "dashed")
+  # configure plot facets
+  p = p + ggplot2::facet_wrap(~experiment, ncol = 5)
+  # add theme to plot, keep aspect ratio 1:1
+  p = p + ggplot2::theme_classic()# + ggplot2::theme(legend.position = "none")#+ do.call(theme, args = list())
+  # add palette to plot
+  ###p = p + scale_colour_npg()
+  if(plot_type == "interactive") return(plotly::ggplotly(p))
+  if(plot_type == "static") return(p + ggplot2::theme(aspect.ratio = 1))
 }

@@ -32,3 +32,12 @@ fitData = fit
 points = "average"
 curves = "line"
 experiments = list(cell_line = c("HCC1806"), DrugName = c("Paclitaxel", "Abemaciclib/LY2835219") )
+
+
+GRdrawDRCV2(fit,
+               points = "all",
+               curves = c("sigmoid", "line", "none"),
+               experiments = list(cell_line = c("HCC1806"), DrugName = c("Paclitaxel", "Abemaciclib/LY2835219") ),
+               plot_type = c("static", "interactive"),
+               output_type = c("together", "separate")
+)
