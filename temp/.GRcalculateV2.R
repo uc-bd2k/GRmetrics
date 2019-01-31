@@ -47,7 +47,7 @@
   ## These are slightly different from the formulas in the slide-deck, which are correct?
   inputData %<>% dplyr::mutate(
     GR_s = 2^( (1 + Dratio)*gr/( (1 + Dratio_ctrl)*gr_ctrl) ) - 1,
-    GR_d = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/Time ) - 1
+    GR_d = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/time ) - 1
   )
 
   inputData %<>% dplyr::mutate(
@@ -70,7 +70,7 @@
       GR_s = ifelse(!Eqidx, GR_s,
                     2^((gr + Dratio_gr)/((1 + Dratio_ctrl)*gr_ctrl))-1),
       GR_d = ifelse(!Eqidx, GR_d,
-                    2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/Time)-1)
+                    2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/time)-1)
     )
   }
   

@@ -6,6 +6,17 @@
             'cell_count__time0')
   caseA_div_time = c('concentration', 'cell_count','cell_count__ctrl',
                      'treatment_duration','division_time')
+  if(case == "static_vs_toxic") {
+    ### check input
+    counts = c("dead_count__time0", "cell_count__time0", "cell_count", 
+               "dead_count", "dead_count__ctrl", "cell_count__ctrl")
+    counts = c(counts, "concentration", "time")
+    if(sum(!counts %in% colnames(inputData)) != 0) {
+      missing = counts[!counts %in% colnames(inputData)]
+      missing = paste0(missing, collapse = ", ")
+      stop(paste0("Missing columns in inputData: ", missing))
+    }
+  }
   if(case == "A") {
     col_check = caseA %in% input_cols
     col_check2 = caseA_div_time %in% input_cols

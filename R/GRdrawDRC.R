@@ -135,7 +135,6 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   if(curves == "line") { parameterTable =  parameter_list$sigmoid$normal }
   if(curves == "none") { parameterTable =  parameter_list$sigmoid$normal }
   
-  
   if(length(group_vars) == 0) data$experiment = "All Data"
   # change experiment to character from factor if necessary
   data$experiment = as.character(data$experiment) 

@@ -1,14 +1,193 @@
 .GRlogisticFit = function(inputData, groupingVariables, force = FALSE,
-                          cap = FALSE) {
-  # if(length(groupingVariables) > 0) {
-  #   metadata = matrix(data = NA, ncol = length(groupingVariables),
-  #                     nrow = length(experiments))
-  #   metadata = as.data.frame(metadata)
-  #   colnames(metadata) = groupingVariables
-  # } else {
-  #   metadata = NULL
-  # }
-  
+                          cap = FALSE, case) {
+  ## Define the biphasic dose-response function
+  ## x is concentration, p is the parameter vector
+  opfct_bi = function(x, p) {
+    term1 = 1 + (p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3]))
+    term2 = 1 + (p[4] + (1 - p[4])/(1 + (x / (10^p[5])) ^ p[6]))
+    2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
+  }
+  ## Define the sigmoidal (or logistic) dose-response function
+  opfct_sig = function(x, p) {
+    p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
+  }
+  ## Define the sigmoidal (or logistic) dose-response function for GR_d
+  opfct_sig_GR_d = function(x, p) {
+    p[1] + (0 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
+  }
+  if(case == "static_vs_toxic") {
+    ### should "time" be added to the grouping variables??
+    grp = dplyr::syms(groupingVariables)
+    data_grp = inputData %>% dplyr::group_by(experiment, !!!grp)
+    data_grp_summ = data_grp %>% 
+      dplyr::filter(concentration > 0) %>%
+      dplyr::summarise(
+        GR_s_mean = mean(GR_s, na.rm = TRUE),
+        GR_d_mean = mean(GR_d, na.rm = TRUE),
+        #rel_cell_mean = mean(rel_cell_count, na.rm = TRUE),
+        #ctrl_cell_doublings = mean(ctrl_cell_doublings, na.rm = TRUE),
+        #treated_cell_doublings = mean(treated_cell_doublings, na.rm = TRUE),
+        concentration_points = length(unique(concentration)),
+        conc = list(unique(concentration)),
+        cc = list( log10(unique(concentration)) ),
+        GR_s = list ( GR_s ),
+        GR_d = list ( GR_d ),
+        #rel_cell_count = list ( rel_cell_count ),
+        concentration = list ( concentration )
+      )
+    ## get RSS of flat fit for GR and relative cell count curve
+    data_grp_summ %<>% dplyr::mutate(
+      RSS1_GR_s = sum( (unlist(GR_s) - GR_s_mean)^2, na.rm = TRUE ),
+      RSS1_GR_d = sum( (unlist(GR_d) - GR_d_mean)^2, na.rm = TRUE )
+      )
+    ## calculate GRmax (or Emax) and GR_AOC (or AUC) directly from unfitted data points
+    data_grp_conc = inputData %>% 
+      dplyr::filter(concentration > 0) %>%
+      dplyr::group_by(experiment, !!!grp, log10_concentration) %>%
+      dplyr::summarise(
+        GR_s_mean = mean(GR_s, na.rm = TRUE),
+        GR_d_mean = mean(GR_s, na.rm = TRUE),
+        cc = unique(log10_concentration)
+      ) %>%
+      ## get maximum (and second largest) concentration for each group
+      dplyr::mutate(max_conc = list(sort(cc, decreasing = T)[1:2]) )
+    data_grp_conc_max = data_grp_conc %>% 
+      ## look at only two highest concentrations
+      dplyr::filter( cc %in%  unlist(max_conc) ) %>%
+      ## GRmax = min of avg. GR value at the two highest concentrations
+      dplyr::summarise(
+        GR_s_max = min(GR_s_mean, na.rm = T),
+        GR_d_max = min(GR_d_mean, na.rm = T)
+      ) %>% dplyr::ungroup()
+    data_grp_conc_all = data_grp_conc %>% dplyr::arrange(cc) %>%
+      ### Not sure how we want to compute AUC/AOC for GR static and toxic yet
+      # dplyr::summarise(
+      #   GR_s_AOC = caTools::trapz(x = cc, y = 1 - GR_s_mean),
+      #   GR_d_AOC = caTools::trapz(x = cc, y = - GR_d_mean) ) %>%
+      # dplyr::ungroup()
+      dplyr::summarise(
+        GR_s_AOC = NA,
+        GR_d_AOC = NA ) %>%
+      dplyr::ungroup()
+    
+    data_grp_conc = suppressMessages(
+      dplyr::full_join(data_grp_conc_all, data_grp_conc_max, 
+                       by = c("experiment", groupingVariables) )
+      )
+    data_grp_summ %<>% dplyr::group_by(experiment, !!!grp) %>%
+      dplyr::mutate(
+        p_sig_GR_s = list( tibble::tribble(
+          ~parameter,                 ~lower,     ~prior,    ~upper,
+          "GRinf",                       0,        0.5,         1, 
+          "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
+          "h_GR",                         0.1,          2,         5
+        ) ),
+        p_sig_GR_d = list( tibble::tribble(
+          ~parameter,                 ~lower,     ~prior,    ~upper,
+          "GRinf",                       -1,        -0.5,         0, 
+          "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
+          "h_GR",                         0.1,          2,         5
+        ) )
+      )
+    sum_square_sig_GR_s = function(x, y, p) {sum((y - opfct_sig(x, p))^2)}
+    sum_square_sig_GR_d = function(x, y, p) {sum((y - opfct_sig_GR_d(x, p))^2)}
+    ## Fit GR_s sigmoidal curve
+    data_grp_summ$sig_fit_GR_s = lapply(1:dim(data_grp_summ)[1], function(i) {
+      param_df = data_grp_summ$p_sig_GR_s[[i]]
+      xx = data_grp_summ$concentration[[i]]
+      yy = data_grp_summ$GR_s[[i]]
+      fit = try(optim(par = param_df$prior, 
+                      function(p, x, y) sum_square_sig_GR_s(x = xx, y = yy, p = p),
+                      hessian = TRUE, method = "L-BFGS-B",
+                      lower = param_df$lower, upper = param_df$upper))
+      fit$parameters = param_df$parameter
+      fit$lower = param_df$lower
+      fit$upper = param_df$upper
+      fit$prior = param_df$prior
+      return(fit)
+    })
+    ## Fit GR_s sigmoidal curve
+    data_grp_summ$sig_fit_GR_d = lapply(1:dim(data_grp_summ)[1], function(i) {
+      param_df = data_grp_summ$p_sig_GR_d[[i]]
+      xx = data_grp_summ$concentration[[i]]
+      yy = data_grp_summ$GR_d[[i]]
+      fit = try(optim(par = param_df$prior, 
+                      function(p, x, y) sum_square_sig_GR_d(x = xx, y = yy, p = p),
+                      hessian = TRUE, method = "L-BFGS-B",
+                      lower = param_df$lower, upper = param_df$upper))
+      fit$parameters = param_df$parameter
+      fit$lower = param_df$lower
+      fit$upper = param_df$upper
+      fit$prior = param_df$prior
+      return(fit)
+    })
+    fit_types = list(static = NULL, toxic = NULL)
+    parameters = list(GR = fit_types)
+    
+    for(x in c("sig_fit_GR_s", "sig_fit_GR_d")) {
+      params = data_grp_summ[[x]][[1]]$parameters
+      df = data_grp_summ %>% 
+        dplyr::select(experiment, !!!grp, #ctrl_cell_doublings, 
+          #treated_cell_doublings, 
+          concentration_points) %>% 
+        dplyr::ungroup()
+      ## get fitted curve parameters
+      vals = sapply(data_grp_summ[[x]], function(y) { 
+        if(!class(y) == "try-error") { y$par } else { rep(NA, length(params)) }
+      }) %>% t() %>% as.data.frame() %>%
+        magrittr::set_colnames(params)
+      df = cbind(df, vals)
+      ## Get GRmax (Emax) and GR_AOC (AUC)
+      if(grepl("_GR_s", x)) { 
+        df =  suppressMessages(
+          dplyr::left_join(df, 
+            data_grp_conc %>% dplyr::select(experiment, !!!grp, GR_s_max, GR_s_AOC),
+              by = c("experiment", groupingVariables) ))
+      } else if(grepl("_GR_d", x)) {
+        df =  suppressMessages(
+          dplyr::left_join(df, 
+            data_grp_conc %>% dplyr::select(experiment, !!!grp, GR_d_max, GR_d_AOC),
+              by = c("experiment", groupingVariables) ))
+      }
+      ## Get RSS1 
+      if(grepl("_GR_s", x)) { df$RSS1 = data_grp_summ$RSS1_GR_s }
+      if(grepl("_GR_d", x)) { df$RSS1 = data_grp_summ$RSS1_GR_d }
+      
+      ## Get RSS2
+      df$RSS2 = sapply(data_grp_summ[[x]], function(y) { 
+        if("value" %in% names(y) && is.numeric(y$value)) { y$value } else { NA }
+      })
+      
+      Npara_flat = 1
+      Npara = length(params)
+      df$df1 = Npara_flat
+      df$df2 = Npara
+      if(grepl("_GR_s", x)) {
+        df$n =  sapply(data_grp_summ$GR_s, function(y) return(length(na.omit(y))) )
+      }
+      if(grepl("_GR_d", x)) {
+        df$n =  sapply(data_grp_summ$GR_d, function(y) return(length(na.omit(y))) )
+      }
+      ## note: f_value same as before, just expressed differently
+      df$f_value = with(df, ( (RSS1 - RSS2)/(df2 - df1) )/(RSS2/(n - df2) ) )
+      df$f_pval = with(df, stats::pf(f_value, df1, df2, lower.tail = FALSE) )
+      ## note: RSS1 = residual sum of squares of flat fit = total sum of squares
+      df$R_square = with(df, 1 - RSS2/RSS1 )
+      
+      #pcutoff = ifelse(force == FALSE, .05 , 1)
+      pcutoff = 0.05
+      # Flat or sigmoid fit for GR curve
+      df %<>% dplyr::mutate(fit = ifelse(f_pval > pcutoff | is.na(f_pval), "flat", "curve" ))
+      
+      if(grepl("_GR_s", x)) { df$flat = data_grp_summ$GR_s_mean }
+      if(grepl("_GR_d", x)) { df$flat = data_grp_summ$GR_d_mean }
+
+      if(x == "sig_fit_GR_s") { parameters$GR$static = df }
+      if(x == "sig_fit_GR_d") { parameters$GR$toxic = df }
+    }
+    
+    return(parameters)
+  }
   grp = dplyr::syms(groupingVariables)
   data_grp = inputData %>% dplyr::group_by(experiment, !!!grp)
   data_grp_summ = data_grp %>% dplyr::summarise(
@@ -96,18 +275,6 @@
         "h",                         0.1,          2,         5
       ) )
     )
-  
-  ## Define the biphasic dose-response function
-  ## x is concentration, p is the parameter vector
-  opfct_bi = function(x, p) {
-    term1 = 1 + (p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3]))
-    term2 = 1 + (p[4] + (1 - p[4])/(1 + (x / (10^p[5])) ^ p[6]))
-    2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
-  }
-  ## Define the sigmoidal (or logistic) dose-response function
-  opfct_sig = function(x, p) {
-    p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
-  }
   #yexp_bi = data_exp$GRvalue
   ## Define the residual sum of squares functions
   sum_square_bi = function(x, y, p) {sum((y - opfct_bi(x, p))^2)}

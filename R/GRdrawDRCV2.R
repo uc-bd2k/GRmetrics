@@ -1,7 +1,7 @@
 GRdrawDRCV2 = function(fitData, points = c("average", "all", "none"),
-                       experiments = "all",
+                       experiments = list(),
                        plot_type = c("static", "interactive"),
-                       output_type = c("together", "separate"),
+                       output_type = c("together", "separate")
                        ) {
   #### check input #####
   # make all inputs length 1
@@ -21,20 +21,31 @@ GRdrawDRCV2 = function(fitData, points = c("average", "all", "none"),
   # get grouping variables
   fit_groups = GRmetrics::GRgetGroupVars(fitData)
   #fit_groups = fitData$metadata$groupingVariables
-  id = c(fit_groups, "Time", "Conc")
+  id = c(fit_groups, "time", "concentration")
   fit_df_melt = fit_df %>%
     reshape2::melt(id.vars = id,
                    measure.vars = c("GR_s", "GR_d", "GR_naive", "GR_combined"),
                    value.name = "GRvalue", variable.name = "GR_metric"
                     )
+  # filter to only selected experiments
+  if(!identical(experiments, list() )) {
+    assertthat::assert_that( class(experiments) == "list" )
+    assertthat::assert_that( sum(!names(experiments) %in% fit_groups) == 0 )
+    for(i in 1:length(experiments)) {
+      temp_grp = names(experiments)[i]
+      temp_list = experiments[[i]]
+      ### make sure all groups for filtering exist
+      assertthat::assert_that(sum(!temp_list %in% unique(fit_df_melt[[temp_grp]])) == 0)
+      ### filter data
+      fit_df_melt = fit_df_melt[ fit_df_melt[[temp_grp]] %in% temp_list,]
+    }
+  }
   ### what should I do with GR values with concentration zero?
   #ctrl_df = fit_df_melt %>% dplyr::filter(Conc == 0)
   grp = syms(c(id, "GR_metric"))
-  exp_sym = syms(c(fit_groups, "Time"))
+  exp_sym = syms(c(fit_groups, "time"))
   if(points == "average") {
     df = fit_df_melt %>%
-      dplyr::filter(CellLine == "HCC1806") %>% 
-      #dplyr::select(CellLine, pert_type, DrugName, Conc, value, variable) %>%
       dplyr::group_by(!!!grp) %>%
       dplyr::summarize(GRvalue = mean(GRvalue, na.rm = T)) %>%
       dplyr::ungroup() 
@@ -44,15 +55,14 @@ GRdrawDRCV2 = function(fitData, points = c("average", "all", "none"),
     ### fill in later
   }
   df %<>%
-    #dplyr::filter(CellLine == "HCC1806") %>% 
-    #dplyr::select(CellLine, pert_type, DrugName, Conc, value, variable) %>%
     dplyr::mutate(exp = paste(!!!exp_sym)) %>%
-    dplyr::filter(Conc > 0) #%>%
-    #dplyr::filter(variable %in% c("GR_d", "GR_s"))
+    dplyr::filter(concentration > 0) %>%
+    dplyr::filter(GR_metric %in% c("GR_d", "GR_s"))
+
   n_plots = length(unique(df$exp))
   if(n_plots > 25) warning("Too many plots [change warning message later]")
   g = ggplot2::ggplot(df) + 
-    ggplot2::geom_point(aes(x = log10(Conc), y = GRvalue, colour = GR_metric, group = exp)) + 
+    ggplot2::geom_point(aes(x = log10(concentration), y = GRvalue, colour = GR_metric, group = exp)) + 
     #ggplot2::theme(legend.position = "none") + 
     ggplot2::facet_wrap(~exp)
   return(g)

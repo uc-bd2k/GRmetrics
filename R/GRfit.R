@@ -5,16 +5,16 @@
 #' assay and calculates growth-rate inhibition (GR) metrics as well as 
 #' traditional metrics (IC50, Emax, etc.) for each experiment
 #' in the dataset. The data must be in a specific format: either that specified
-#' by case "A" or case "C" described in the details below.
+#' by case "A" or case "B" described in the details below.
 #'
 #' @param inputData a data table in one of the specified formats (Case A or
-#' Case C). See details below for description. See \code{data(inputCaseA)} or
-#' \code{data(inputCaseC)} for example input data frames. See help files for
-#' \code{\link{inputCaseA}} and \code{\link{inputCaseC}} for description of
+#' Case B). See details below for description. See \code{data(inputCaseA)} or
+#' \code{data(inputCaseB)} for example input data frames. See help files for
+#' \code{\link{inputCaseB}} and \code{\link{inputCaseB}} for description of
 #' these examples.
 #' @param groupingVariables a vector of column names from inputData. All of the
 #' columns in inputData except for those identified here will be averaged over.
-#' @param case either "A" or "C", indicating the format of the input data. See
+#' @param case either "A" or "B", indicating the format of the input data. See
 #' below for descriptions of these formats.
 #' @param force a logical value indicating whether to attempt to "force" a
 #' sigmoidal fit, i.e. whether to allow fits with F-test p-values greater
@@ -81,7 +81,7 @@
 #' All other columns will be treated as additional keys on which the data
 #' will be grouped (e.g. cell_line, drug, time, replicate)
 #'
-#' The mandatory columns for inputData for Case "C" are the following as
+#' The mandatory columns for inputData for Case "B" are the following as
 #' well as other grouping columns.
 #'
 #' 1. concentration - column with concentration values (not log transformed)
@@ -102,7 +102,7 @@
 #' 
 #' To use division rate instead of initial cell count,
 #' inputData should not have any initial cell counts (i.e. For Case "A", no 
-#' "cell_count__time0" column. For Case "C", no values of 0 in the "time" 
+#' "cell_count__time0" column. For Case "B", no values of 0 in the "time" 
 #' column) and should instead have two columns "treatment_duration" and 
 #' "division_time".
 #' 
@@ -160,14 +160,14 @@
 #' # View vector of grouping variables used for calculation
 #' GRgetGroupVars(output1)
 #' }
-#' # Load Case C (example 4) input
+#' # Load Case B (example 4) input
 #' # Same data, different format
-#' data("inputCaseC")
-#' head(inputCaseC)
-#' output4 = GRfit(inputData = inputCaseC,
+#' data("inputCaseB")
+#' head(inputCaseB)
+#' output4 = GRfit(inputData = inputCaseB,
 #' groupingVariables = c('cell_line','agent', 'perturbation','replicate',
 #' 'time'),
-#' case = "C")
+#' case = "B")
 #' # Extract data tables and export to .tsv or .csv
 #' \dontrun{
 #' # Write GR metrics parameter table to tab-separated text file
@@ -188,10 +188,10 @@ GRfit = function(inputData, groupingVariables, case = "A",
   message = input_check[[1]]
   initial_count = input_check[[2]]
   if(!is.null(message)) stop(message)
-  inputData = .convert(inputData, case, initial_count)
+  if(case == "B") inputData = .convert(inputData, case, initial_count)
   gr_table = .GRcalculate(inputData, groupingVariables, cap, case,
                           initial_count)
-  GRlogfit = .GRlogisticFit(gr_table, groupingVariables, force, cap)
+  GRlogfit = .GRlogisticFit(gr_table, groupingVariables, force, cap, case)
   #parameter_table = GRlogfit$parameters
   #GR_drc_list = GRlogfit$GR_drc_list
   #trad_drc_list = GRlogfit$trad_drc_list
