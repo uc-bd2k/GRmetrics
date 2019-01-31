@@ -15,6 +15,7 @@
   opfct_sig_GR_d = function(x, p) {
     p[1] + (0 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
   }
+  ##### start static vs. toxic curve fitting #######
   if(case == "static_vs_toxic") {
     ### should "time" be added to the grouping variables??
     grp = dplyr::syms(groupingVariables)
@@ -140,20 +141,24 @@
         dplyr::mutate_if(is.factor, function(z) as.numeric(as.character(z)))
       df = cbind(df, vals)
       ## Get GRmax (Emax) and GR_AOC (AUC)
-      if(grepl("_GR_s", x)) { 
+      if(grepl("GR_s", x)) { 
         df =  suppressMessages(
           dplyr::left_join(df, 
             data_grp_conc %>% dplyr::select(experiment, !!!grp, GR_s_max, GR_s_AOC),
               by = c("experiment", groupingVariables) ))
-      } else if(grepl("_GR_d", x)) {
+        df %<>% dplyr::rename(GRmax = GR_s_max, GR_AOC = GR_s_AOC) %>%
+          dplyr::mutate(GR_metric = "GR_s")
+      } else if(grepl("GR_d", x)) {
         df =  suppressMessages(
           dplyr::left_join(df, 
             data_grp_conc %>% dplyr::select(experiment, !!!grp, GR_d_max, GR_d_AOC),
               by = c("experiment", groupingVariables) ))
+        df %<>% dplyr::rename(GRmax = GR_d_max, GR_AOC = GR_d_AOC) %>%
+          dplyr::mutate(GR_metric = "GR_d")
       }
       ## Get RSS1 
-      if(grepl("_GR_s", x)) { df$RSS1 = data_grp_summ$RSS1_GR_s }
-      if(grepl("_GR_d", x)) { df$RSS1 = data_grp_summ$RSS1_GR_d }
+      if(grepl("GR_s", x)) { df$RSS1 = data_grp_summ$RSS1_GR_s }
+      if(grepl("GR_d", x)) { df$RSS1 = data_grp_summ$RSS1_GR_d }
       
       ## Get RSS2
       df$RSS2 = sapply(data_grp_summ[[x]], function(y) {
@@ -181,14 +186,15 @@
       # Flat or sigmoid fit for GR curve
       df %<>% dplyr::mutate(fit = ifelse(f_pval > pcutoff | is.na(f_pval), "flat", "curve" ))
       
-      if(grepl("_GR_s", x)) { df$flat = data_grp_summ$GR_s_mean }
-      if(grepl("_GR_d", x)) { df$flat = data_grp_summ$GR_d_mean }
+      if(grepl("GR_s", x)) { df$flat = data_grp_summ$GR_s_mean }
+      if(grepl("GR_d", x)) { df$flat = data_grp_summ$GR_d_mean }
 
       if(x == "sig_fit_GR_s") { parameters$GR$static = df }
       if(x == "sig_fit_GR_d") { parameters$GR$toxic = df }
     }
     return(parameters)
   }
+  ##### end static vs. toxic curve fitting #######
   grp = dplyr::syms(groupingVariables)
   data_grp = inputData %>% dplyr::group_by(experiment, !!!grp)
   data_grp_summ = data_grp %>% dplyr::summarise(

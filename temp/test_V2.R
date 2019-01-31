@@ -1,3 +1,5 @@
+
+devtools::load_all()
 test = read.csv("resources/GR_v2_all_from_R.csv")
 colnames(test)[colnames(test) == "Day0DeadCnt"] = "dead_count__time0"
 colnames(test)[colnames(test) == "Day0Cnt"] = "cell_count__time0"
@@ -13,31 +15,18 @@ counts = c("dead_count__time0", "cell_count__time0", "cell_count", "dead_count",
 groups = c("cell_line", "time", "DesignNumber", "DrugName", "pert_type")
 test_input = test[, colnames(test) %in% c(counts, groups, "concentration")]
 
-fit = GRfitV2(test_input, groups[groups != "time"], cap = FALSE, case = "static_vs_toxic",
-  initial_count = T)
-GRdrawDRCV2(fit, points = "average",
-           experiments = list(cell_line = c("HCC1806"), DrugName = c("Paclitaxel", "Abemaciclib/LY2835219") ),
-           plot_type = c("static", "interactive"),
-           output_type = c("together", "separate") )
-fit = .GRcalculate(test_input, groups[groups != "time"], cap = FALSE, case = "static_vs_toxic",
-                   initial_count = T)
-fitData$metadata$gr_table = fit
-inputData = fit
 fit = GRfit(test_input, groups[groups != "time"], cap = FALSE, case = "static_vs_toxic")
-
-
-#inputData = fit$metadata$gr_table
-#groupingVariables = fit$metadata$groupingVariables
-fitData = fit
 points = "average"
-curves = "line"
-experiments = list(cell_line = c("HCC1806"), DrugName = c("Paclitaxel", "Abemaciclib/LY2835219") )
-
-
-GRdrawDRCV2(fit,
+curves = "sigmoid"
+plot_type = "static"
+output_type = "separate"
+fitData = fit
+gg = GRdrawDRCV2(fit,
                points = "all",
                curves = c("sigmoid", "line", "none"),
                experiments = list(cell_line = c("HCC1806"), DrugName = c("Paclitaxel", "Abemaciclib/LY2835219") ),
+               #experiments = list(cell_line = "HCC1806"),
                plot_type = c("static", "interactive"),
-               output_type = c("together", "separate")
+               #output_type = c("together", "separate")
+               output_type = "separate"
 )
