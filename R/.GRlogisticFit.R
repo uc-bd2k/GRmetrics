@@ -96,10 +96,10 @@
       param_df = data_grp_summ$p_sig_GR_s[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$GR_s[[i]]
-      fit = try(optim(par = param_df$prior, 
+      fit = suppressMessages(try(optim(par = param_df$prior, 
                       function(p, x, y) sum_square_sig_GR_s(x = xx, y = yy, p = p),
                       hessian = TRUE, method = "L-BFGS-B",
-                      lower = param_df$lower, upper = param_df$upper))
+                      lower = param_df$lower, upper = param_df$upper)))
       fit$parameters = param_df$parameter
       fit$lower = param_df$lower
       fit$upper = param_df$upper
@@ -111,10 +111,10 @@
       param_df = data_grp_summ$p_sig_GR_d[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$GR_d[[i]]
-      fit = try(optim(par = param_df$prior, 
+      fit = suppressMessages(try(optim(par = param_df$prior, 
                       function(p, x, y) sum_square_sig_GR_d(x = xx, y = yy, p = p),
                       hessian = TRUE, method = "L-BFGS-B",
-                      lower = param_df$lower, upper = param_df$upper))
+                      lower = param_df$lower, upper = param_df$upper)))
       fit$parameters = param_df$parameter
       fit$lower = param_df$lower
       fit$upper = param_df$upper
@@ -130,12 +130,14 @@
         dplyr::select(experiment, !!!grp, #ctrl_cell_doublings, 
           #treated_cell_doublings, 
           concentration_points) %>% 
-        dplyr::ungroup()
+        dplyr::ungroup() %>%
+        dplyr::mutate_if(is.factor, as.character)
       ## get fitted curve parameters
       vals = sapply(data_grp_summ[[x]], function(y) { 
         if(!class(y) == "try-error") { y$par } else { rep(NA, length(params)) }
       }) %>% t() %>% as.data.frame() %>%
-        magrittr::set_colnames(params)
+        magrittr::set_colnames(params) %>%
+        dplyr::mutate_if(is.factor, function(z) as.numeric(as.character(z)))
       df = cbind(df, vals)
       ## Get GRmax (Emax) and GR_AOC (AUC)
       if(grepl("_GR_s", x)) { 
@@ -154,7 +156,7 @@
       if(grepl("_GR_d", x)) { df$RSS1 = data_grp_summ$RSS1_GR_d }
       
       ## Get RSS2
-      df$RSS2 = sapply(data_grp_summ[[x]], function(y) { 
+      df$RSS2 = sapply(data_grp_summ[[x]], function(y) {
         if("value" %in% names(y) && is.numeric(y$value)) { y$value } else { NA }
       })
       
@@ -185,7 +187,6 @@
       if(x == "sig_fit_GR_s") { parameters$GR$static = df }
       if(x == "sig_fit_GR_d") { parameters$GR$toxic = df }
     }
-    
     return(parameters)
   }
   grp = dplyr::syms(groupingVariables)
