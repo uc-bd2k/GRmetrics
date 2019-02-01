@@ -163,7 +163,7 @@ GRdrawDRCV2 = function(fitData,
     # configure plot facets
     p = p + ggplot2::facet_wrap(~experiment, ncol = 5)
     # add theme to plot, keep aspect ratio 1:1
-    p = p + ggplot2::theme_classic()# + ggplot2::theme(legend.position = "none")#+ do.call(theme, args = list())
+    p = p + ggplot2::theme_classic() + ggplot2::theme(legend.position = legend)#+ do.call(theme, args = list())
     # add palette to plot
     ###p = p + scale_colour_npg()
     if(plot_type == "interactive") return(plotly::ggplotly(p))

@@ -41,7 +41,7 @@
     ### Note: what about NA values in dead_count and cell_count?? these will propagate currently, but we may want to set them to 0 instead?
     inputData %<>% 
       dplyr::mutate(too_few = dead_count + cell_count < .95*(cell_count__time0 + dead_count__time0)) %>%
-      dplyr::mutate(too_many = pert_type != 'ctl_vehicle' & 
+      dplyr::mutate(too_many = concentration > 0 &
         dead_count + cell_count > 1.15*(cell_count__ctrl + dead_count__ctrl))
     ## if missing cells, assign to dead cells
     inputData %<>% 

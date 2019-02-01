@@ -16,16 +16,20 @@ colnames(test)[colnames(test) == "DesignNumber"] = "design"
 
 
 counts = c("dead_count__time0", "cell_count__time0", "cell_count", "dead_count", "dead_count__ctrl", "cell_count__ctrl")
-groups = c("cell_line", "time", "design", "treatment")
+groups = c("cell_line", "time", "design", "treatment", "pert_type")
 test_input = test[, colnames(test) %in% c(counts, groups, "concentration")]
 
-test_input = test_input[,c("cell_line", "treatment", "design", "time", 
+test_input = test_input[,c("cell_line", "treatment", "pert_type", "design", "time",
                            "concentration", "cell_count__time0", "dead_count__time0",
                            "cell_count", "dead_count", "cell_count__ctrl", "dead_count__ctrl")]
-test_small = test_input %>% dplyr::filter(cell_line == "BT20")
+test_small = test_input %>% dplyr::filter(cell_line == "BT20",
+                                          concentration > 0)
+
+test_med = test_input[1:50000,]
+write.csv(test_med, file = "temp/gr_static_vs_toxic_input_med.csv", quote = T, row.names = F )
 write.csv(test_small, file = "temp/gr_static_vs_toxic_input_small.csv", quote = T, row.names = F)
 
-write.csv(test_input, file = "temp/gr_static_vs_toxic_input.csv", quote = T, row.names = F)
+write.csv(test_input, file = "temp/gr_static_vs_toxic_input_edited.csv", quote = T, row.names = F)
 test_small2 = read_csv("temp/gr_static_vs_toxic_input_small.csv")
 
 test_input = read.csv("temp/gr_static_vs_toxic_input.csv")
