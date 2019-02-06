@@ -47,13 +47,13 @@
         warning("Initial cell count given, ignoring columns 'treatment_duration' and 
                 'division_time' for calculation of GR values.")
       }
-      } else {
+    } else {
         if(!cond2) {
           message = "Need initial cell count or treatment_duration and division
           time for control cells."
         }
         initial_count = FALSE
-        }
+    }
   }
   if(case == "B") {
     # check for correct input columns

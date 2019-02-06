@@ -11,7 +11,8 @@
       log2nn = with(inputData, log2(cell_count/cell_count__time0))
       log2nn_ctrl = with(inputData, log2(cell_count__ctrl/cell_count__time0))
       GR = 2^(log2nn/log2nn_ctrl) - 1
-    } else {
+    } 
+    if(!initial_count) {
       log2_rel = with(inputData, log2(cell_count/cell_count__ctrl))
       log2nn_ctrl = with(inputData, treatment_duration/division_time)
       GR = 2^(1 + log2_rel/log2nn_ctrl) - 1
@@ -22,7 +23,13 @@
     input_edited$GRvalue = GR
     input_edited$rel_cell_count = rel_cell_count
     input_edited$ctrl_cell_doublings = log2nn_ctrl
-    input_edited$treated_cell_doublings = log2nn
+    if(initial_count) {
+      input_edited$treated_cell_doublings = log2nn
+    }
+    if(!initial_count) {
+      #input_edited$treated_cell_doublings = log2_rel + log2nn_ctrl
+      input_edited$treated_cell_doublings = NA
+    }
     tmp<-input_edited[,groupingVariables, drop = FALSE]
     experimentNew = (apply(tmp,1, function(x) (paste(x,collapse=" "))))
     if(cap == TRUE) {

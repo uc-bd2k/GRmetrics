@@ -60,7 +60,8 @@
 # - add a message or error output noting updated function inputs
 # - figure out adding a geom to plotly (for log-ticks and scientific notation) or 
 #   how to make log-ticks from geom_segment only (should work with plotly) ( long-term )
-GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all",
+GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"),
+                      experiments = list(),
                       min = "auto", max = "auto",
                       color = "experiment",
                       points = c("average", "all", "none"),
@@ -139,9 +140,22 @@ GRdrawDRC <- function(fitData, metric = c("GR", "rel_cell"), experiments = "all"
   # change experiment to character from factor if necessary
   data$experiment = as.character(data$experiment) 
   # filter to only selected experiments
-  if(!identical(experiments, "all")) {
-    parameterTable %<>% dplyr::filter(experiment %in% experiments)
-    data %<>% dplyr::filter(experiment %in% experiments)
+  # if(!identical(experiments, "all")) {
+  #   parameterTable %<>% dplyr::filter(experiment %in% experiments)
+  #   data %<>% dplyr::filter(experiment %in% experiments)
+  # }
+  if(!identical(experiments, list() )) {
+    assertthat::assert_that( class(experiments) == "list" )
+    assertthat::assert_that( sum(!names(experiments) %in% group_vars) == 0 )
+    for(i in 1:length(experiments)) {
+      temp_grp = names(experiments)[i]
+      temp_list = experiments[[i]]
+      ### make sure all groups for filtering exist
+      assertthat::assert_that(sum(!temp_list %in% unique(data[[temp_grp]])) == 0)
+      ### filter data
+      data = data[ data[[temp_grp]] %in% temp_list,]
+      parameterTable = parameterTable[ parameterTable[[temp_grp]] %in% temp_list,]
+    }
   }
   if(min == "auto") min = min(data$concentration, na.rm = TRUE)
   if(max == "auto") max = max(data$concentration, na.rm = TRUE)

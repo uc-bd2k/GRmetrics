@@ -25,7 +25,7 @@ test_input = test_input[,c("cell_line", "treatment", "pert_type", "design", "tim
 test_small = test_input %>% dplyr::filter(cell_line == "BT20",
                                           concentration > 0)
 
-test_med = test_input[1:50000,]
+test_med = test_input[1:30000,]
 write.csv(test_med, file = "temp/gr_static_vs_toxic_input_med.csv", quote = T, row.names = F )
 write.csv(test_small, file = "temp/gr_static_vs_toxic_input_small.csv", quote = T, row.names = F)
 
