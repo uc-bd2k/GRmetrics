@@ -144,5 +144,5 @@ GRgetGroupVars <- function(fitData) {
 #' @export
 
 GRgetDefs <- function(fitData) {
-  return(SummarizedExperiment::rowData(fitData))
+  #return(SummarizedExperiment::rowData(fitData))
 }
