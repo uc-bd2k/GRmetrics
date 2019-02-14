@@ -3,17 +3,17 @@
   ## Define the biphasic dose-response function
   ## x is concentration, p is the parameter vector
   opfct_bi = function(x, p) {
-    term1 = 1 + (p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3]))
-    term2 = 1 + (p[4] + (1 - p[4])/(1 + (x / (10^p[5])) ^ p[6]))
+    term1 = 1 + (p[1] + (1 - p[1])/(1 + (10^x / (10^p[2])) ^ p[3]))
+    term2 = 1 + (p[4] + (1 - p[4])/(1 + (10^x / (10^p[5])) ^ p[6]))
     2^( 0.5*( log2(term1) + log2(term2) ) ) - 1
   }
   ## Define the sigmoidal (or logistic) dose-response function
   opfct_sig = function(x, p) {
-    p[1] + (1 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
+    p[1] + (1 - p[1])/(1 + (10^x / (10^p[2])) ^ p[3])
   }
   ## Define the sigmoidal (or logistic) dose-response function for GR_d
   opfct_sig_GR_d = function(x, p) {
-    p[1] + (0 - p[1])/(1 + (x / (10^p[2])) ^ p[3])
+    p[1] + (0 - p[1])/(1 + (10^x / (10^p[2])) ^ p[3])
   }
   ##### start static vs. toxic curve fitting #######
   if(case == "static_vs_toxic") {
@@ -97,8 +97,11 @@
       param_df = data_grp_summ$p_sig_GR_s[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$GR_s[[i]]
-      fit = suppressMessages(try(optim(par = param_df$prior, 
-                      function(p, x, y) sum_square_sig_GR_s(x = xx, y = yy, p = p),
+      startVec = param_df$prior
+      psVec <- abs(startVec)
+      psVec[psVec < 1e-4] <- 1
+      fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),
+                      function(p, x, y) sum_square_sig_GR_s(x = log10(xx), y = yy, p = p),
                       hessian = TRUE, method = "L-BFGS-B",
                       lower = param_df$lower, upper = param_df$upper)))
       fit$parameters = param_df$parameter
@@ -112,8 +115,11 @@
       param_df = data_grp_summ$p_sig_GR_d[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$GR_d[[i]]
-      fit = suppressMessages(try(optim(par = param_df$prior, 
-                      function(p, x, y) sum_square_sig_GR_d(x = xx, y = yy, p = p),
+      startVec = param_df$prior
+      psVec <- abs(startVec)
+      psVec[psVec < 1e-4] <- 1
+      fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),
+                      function(p, x, y) sum_square_sig_GR_d(x = log10(xx), y = yy, p = p),
                       hessian = TRUE, method = "L-BFGS-B",
                       lower = param_df$lower, upper = param_df$upper)))
       fit$parameters = param_df$parameter
@@ -292,10 +298,13 @@
     param_df = data_grp_summ$p_bi_GR[[i]]
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$GRvalue[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_bi(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),
+                    function(p, x, y) sum_square_bi(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B", 
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -307,10 +316,13 @@
     param_df = data_grp_summ$p_bi_rel[[i]]
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$rel_cell_count[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_bi(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),
+                    function(p, x, y) sum_square_bi(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B", 
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -324,10 +336,12 @@
     param_df %<>% dplyr::mutate(parameter = gsub("_1$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$GRvalue[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),                    function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B", 
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -341,10 +355,13 @@
     param_df %<>% dplyr::mutate(parameter = gsub("_2$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$GRvalue[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),
+                    function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B", 
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -358,10 +375,12 @@
     param_df %<>% dplyr::mutate(parameter = gsub("_1$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$rel_cell_count[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),                    function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B", 
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -375,10 +394,12 @@
     param_df %<>% dplyr::mutate(parameter = gsub("_2$", "", parameter))
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$rel_cell_count[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),                    function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B",
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -391,10 +412,12 @@
     param_df = data_grp_summ$p_sig_GR[[i]]
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$GRvalue[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),                    function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B",
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -406,10 +429,12 @@
     param_df = data_grp_summ$p_sig_rel[[i]]
     xx = data_grp_summ$concentration[[i]]
     yy = data_grp_summ$rel_cell_count[[i]]
-    fit = try(optim(par = param_df$prior, 
-                    function(p, x, y) sum_square_sig(x = xx, y = yy, p = p),
+    startVec = param_df$prior
+    psVec <- abs(startVec)
+    psVec[psVec < 1e-4] <- 1
+    fit = suppressMessages(try(optim(par = param_df$prior, control = list(maxit = 500, parscale = psVec),                    function(p, x, y) sum_square_sig(x = log10(xx), y = yy, p = p),
                     hessian = TRUE, method = "L-BFGS-B",
-                    lower = param_df$lower, upper = param_df$upper))
+                    lower = param_df$lower, upper = param_df$upper)))
     fit$parameters = param_df$parameter
     fit$lower = param_df$lower
     fit$upper = param_df$upper
@@ -457,8 +482,8 @@
       } else {
         df %<>%
           dplyr::mutate(GEC50 = 10^log10_GEC50) %>%
-          dplyr::mutate(GR50 = GEC50*((1-GRinf)/(0.5-GRinf) - 1)^(1/h_GR) ) %>%
-          dplyr::mutate(log10_GR50 = log10(GR50) )
+          dplyr::mutate(log10_GR50 = log10_GEC50*((1-GRinf)/(0.5-GRinf) - 1)^(1/h_GR) ) %>%
+          dplyr::mutate(GR50 = 10^log10_GR50 )
         ## adjust parameters for flat fits
         # df %<>%
         #   ### notes: what about log_GR50 and log_GEC50? ask Marc.

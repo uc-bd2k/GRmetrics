@@ -204,57 +204,57 @@ GRfit = function(inputData, groupingVariables, case = "A",
                     groupingVariables = groupingVariables))
   return(output)
   ########
-  
-  colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_rel_cell',
-                                'experiment', 'concentration_points')]
-  rownames(colData) = colData$experiment
-  colData = S4Vectors::DataFrame(colData)
-  
-  Metric = c('ctrl_cell_doublings','GR50','log10_GR50','GRmax','GR_AOC','GEC50','log10_GEC50',
-             'GRinf','h_GR','r2_GR','pval_GR','flat_fit_GR', 
-              'IC50', 'log10_IC50','Emax', 'AUC', 'EC50', 'log10_EC50','Einf', 'h', 
-             "Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2",
-              'r2_rel_cell', 'pval_rel_cell', 'flat_fit_rel_cell')
-  assays = parameter_table[ , Metric]
-  rownames(assays) = parameter_table$experiment
-  assays = t(assays)
-
-  Description = c(
-    "The number of cell doublings in the control population during the assay",
-    "The concentration at which GR(c) = 0.5",
-    "log10 value of GR50",
-    "The maximal effect of the drug (minimal GR value)",
-    "The 'Area Over the Curve' - The area between the line GR = 1 and the curve, similar to traditional AUC",
-    "The concentration at half-maximal effect (growth rate normalized)",
-    "The asymptotic effect of the drug (growth rate normalized)",
-    "The Hill coefficient of the fitted (GR) curve, which reflects how steep the (GR) dose response curve is",
-    "log10 value of GEC50",
-    "The coefficient of determination - essentially how well the (GR) curve fits to the data points",
-    "The p-value of the F-test comparing the fit of the (GR) curve to a horizontal line fit",
-    "For data that doesn't significantly fit better to a curve than a horizontal line fit, the y value (GR) of the flat line", 
-    "The concentration at which relative cell count = 0.5",
-    "log10 value of IC50",
-    "The maximal effect of the drug (minimal relative cell count value)",
-    "The 'Area Under the Curve' - The area below the fitted (traditional) dose response curve",
-    "The concentration at half-maximal effect (not growth rate normalized)",
-    "The asymptotic effect of the drug (not growth rate normalized)",
-    "The Hill coefficient of the fitted (traditional) dose response curve, which reflects how steep the (traditional) dose response curve is",
-    rep("", 6),
-    "log10 value of EC50",
-    "The coefficient of determination - essentially how well the (traditional) curve fits to the data points",
-    "The p-value of the F-test comparing the fit of the (traditional) curve to a horizontal line fit",
-    "For data that doesn't significantly fit better to a curve than a horizontal line fit, the y value (relative cell count) of the flat line"
-                  )
-  rowData = cbind(Metric, Description)
-  rownames(rowData) = Metric
-  rowData = S4Vectors::DataFrame(rowData)
-  rowData$Metric = as.character(rowData$Metric)
-  rowData$Description = as.character(rowData$Description)
-
-  output = SummarizedExperiment::SummarizedExperiment(assays = assays,
-                                                      colData = colData,
-            rowData = rowData, metadata = list(gr_table = gr_table, groupingVariables = groupingVariables,
-                                               GR_drc_list = GR_drc_list, trad_drc_list = trad_drc_list))
-  return(output)
+  # 
+  # colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_rel_cell',
+  #                               'experiment', 'concentration_points')]
+  # rownames(colData) = colData$experiment
+  # colData = S4Vectors::DataFrame(colData)
+  # 
+  # Metric = c('ctrl_cell_doublings','GR50','log10_GR50','GRmax','GR_AOC','GEC50','log10_GEC50',
+  #            'GRinf','h_GR','r2_GR','pval_GR','flat_fit_GR', 
+  #             'IC50', 'log10_IC50','Emax', 'AUC', 'EC50', 'log10_EC50','Einf', 'h', 
+  #            "Einf_1", "log10_GEC50_1", "h_1", "Einf_2", "log10_GEC50_2", "h_2",
+  #             'r2_rel_cell', 'pval_rel_cell', 'flat_fit_rel_cell')
+  # assays = parameter_table[ , Metric]
+  # rownames(assays) = parameter_table$experiment
+  # assays = t(assays)
+  # 
+  # Description = c(
+  #   "The number of cell doublings in the control population during the assay",
+  #   "The concentration at which GR(c) = 0.5",
+  #   "log10 value of GR50",
+  #   "The maximal effect of the drug (minimal GR value)",
+  #   "The 'Area Over the Curve' - The area between the line GR = 1 and the curve, similar to traditional AUC",
+  #   "The concentration at half-maximal effect (growth rate normalized)",
+  #   "The asymptotic effect of the drug (growth rate normalized)",
+  #   "The Hill coefficient of the fitted (GR) curve, which reflects how steep the (GR) dose response curve is",
+  #   "log10 value of GEC50",
+  #   "The coefficient of determination - essentially how well the (GR) curve fits to the data points",
+  #   "The p-value of the F-test comparing the fit of the (GR) curve to a horizontal line fit",
+  #   "For data that doesn't significantly fit better to a curve than a horizontal line fit, the y value (GR) of the flat line", 
+  #   "The concentration at which relative cell count = 0.5",
+  #   "log10 value of IC50",
+  #   "The maximal effect of the drug (minimal relative cell count value)",
+  #   "The 'Area Under the Curve' - The area below the fitted (traditional) dose response curve",
+  #   "The concentration at half-maximal effect (not growth rate normalized)",
+  #   "The asymptotic effect of the drug (not growth rate normalized)",
+  #   "The Hill coefficient of the fitted (traditional) dose response curve, which reflects how steep the (traditional) dose response curve is",
+  #   rep("", 6),
+  #   "log10 value of EC50",
+  #   "The coefficient of determination - essentially how well the (traditional) curve fits to the data points",
+  #   "The p-value of the F-test comparing the fit of the (traditional) curve to a horizontal line fit",
+  #   "For data that doesn't significantly fit better to a curve than a horizontal line fit, the y value (relative cell count) of the flat line"
+  #                 )
+  # rowData = cbind(Metric, Description)
+  # rownames(rowData) = Metric
+  # rowData = S4Vectors::DataFrame(rowData)
+  # rowData$Metric = as.character(rowData$Metric)
+  # rowData$Description = as.character(rowData$Description)
+  # 
+  # output = SummarizedExperiment::SummarizedExperiment(assays = assays,
+  #                                                     colData = colData,
+  #           rowData = rowData, metadata = list(gr_table = gr_table, groupingVariables = groupingVariables,
+  #                                              GR_drc_list = GR_drc_list, trad_drc_list = trad_drc_list))
+  # return(output)
 }
 
