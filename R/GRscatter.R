@@ -49,120 +49,214 @@
 #' GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB',
 #' plotly = FALSE)
 
-GRscatter = function(fitData, metric = c("GR", "rel_cell"), parameter = "GR50",
-                     variable, xaxis, yaxis, plotly = TRUE){
-  if(length(xaxis) != length(yaxis)) {
-    if(length(xaxis) == 1) {
-      xaxis = rep(xaxis, length(yaxis))
-    } else if (length(yaxis) == 1) {
-      yaxis = rep(yaxis, length(xaxis))
-    } else {
-      stop('xaxis and yaxis must be of the same length or one must be of
-           length 1')
-    }
-  }
-  # data = cbind(as.data.frame(SummarizedExperiment::colData(fitData)),
-  #             t(SummarizedExperiment::assay(fitData)))
+GRscatter = function(fitData,
+                     metric = c("GR", "rel_cell"),
+                     fit = c("sigmoid", "biphasic", "sigmoid_high", "sigmoid_low"),
+                     xaxis= c("GRinf", "GRmax", "GR50", "GEC50", "h_GR", "GR_AOC",
+                             "Einf", "Emax", "IC50", "EC50", "h", "AUC",
+                             "GRinf_1", "GRinf_2", "GEC50_1", "GEC50_2",
+                             "Einf_1", "Einf_2", "EC50_1", "EC50_2"),
+                     yaxis = c("GR50", "GRmax", "GRinf", "GEC50", "h_GR", "GR_AOC",
+                               "Einf", "Emax", "IC50", "EC50", "h", "AUC",
+                               "GRinf_1", "GRinf_2", "GEC50_1", "GEC50_2",
+                               "Einf_1", "Einf_2", "EC50_1", "EC50_2"),
+                     color = "experiment",
+                     plot_type = c("interactive", "static") ) {
+  xaxis = xaxis[1]
+  fit = fit[1]
+  yaxis = yaxis[1]
+  plot_type = plot_type[1]
   metric = metric[1]
+  color = color[1]
+  
+  group_vars = GRmetrics::GRgetGroupVars(fitData)
+  assertthat::assert_that(color %in% c(group_vars, "experiment"))
+  color = sym(color)
+  
+  assertthat::assert_that(metric %in% c("GR", "rel_cell"))
+  assertthat::assert_that(fit %in% c("sigmoid", "biphasic", "sigmoid_high", "sigmoid_low"))
+  if(metric == "GR" && fit %in% c("sigmoid", "sigmoid_high", "sigmoid_low")) {
+    param_choices = c("GRinf", "GRmax", "GR50", "GEC50", "h_GR", "GR_AOC")
+  } else if(metric == "GR" && fit == "biphasic") {
+    param_choices = c("GRinf_1", "GRinf_2", "GEC50_1", "GEC50_2")
+  } else if(metric == "rel_cell" && fit %in% c("sigmoid", "sigmoid_high", "sigmoid_low")) {
+    param_choices = c("Einf", "Emax", "IC50", "EC50", "h", "AUC")
+  } else if(metric == "rel_cell" && fit == "biphasic") {
+    param_choices = c("Einf_1", "Einf_2", "EC50_1", "EC50_2")
+  }
+  assertthat::assert_that(xaxis %in% param_choices)
+  assertthat::assert_that(yaxis %in% param_choices)
+  xaxis_sym = sym(xaxis)
+  yaxis_sym = sym(yaxis)
+  
   parameter_list = GRmetrics::GRgetMetrics(fitData)[[metric]]
   if(fit == "sigmoid") { parameterTable =  parameter_list$sigmoid$normal }
   if(fit == "sigmoid_high") { parameterTable =  parameter_list$sigmoid$high }
   if(fit == "sigmoid_low") { parameterTable =  parameter_list$sigmoid$low }
   if(fit == "biphasic") { parameterTable =  parameter_list$biphasic$normal }
-  data = parameterTable
+
+  assertthat::assert_that(as.character(xaxis) %in% colnames(parameterTable))
+  assertthat::assert_that(as.character(yaxis) %in% colnames(parameterTable))
   
-  if(parameter == "GR50") {
-    #data$`log10(GR50)` = log10(data$GR50)
-    parameter = "log10_GR50"
-  }
-  if(parameter == "IC50") {
-    #data$`log10(IC50)` = log10(data$IC50)
-    parameter = "log10_IC50"
-  }
-  if(parameter == "h_GR") {
-    data$`log2(h_GR)` = log2(data$h_GR)
-    parameter = "log2(h_GR)"
-  }
-  if(parameter == "h") {
-    data$`log2(h)` = log2(data$h)
-    parameter = "log2(h)"
-  }
-  all_data = NULL
-  for(i in 1:length(xaxis)) {
-    xaxis_data = data[data[[variable]] == xaxis[i],]
-    yaxis_data = data[data[[variable]] == yaxis[i],]
-    # removing the selected xaxis and yaxis values from the "experiment"
-    # column for merging
-    temp1 = sub(xaxis[i], '', xaxis_data$experiment)
-    temp1 = sub('  ', ' ', temp1)
-    xaxis_data$merge = temp1
-
-    temp2 = sub(yaxis[i], '', yaxis_data$experiment)
-    temp2 = sub('  ', ' ', temp2)
-    yaxis_data$merge = temp2
-
-    merge_data = merge(xaxis_data, yaxis_data, by = 'merge')
-    merge_data$cross = as.factor(paste(xaxis[i], 'x', yaxis[i], sep = ' '))
-    all_data = rbind(all_data, merge_data)
-  }
-
-  x_data = paste0(parameter,'.x')
-  y_data = paste0(parameter,'.y')
-
-  ## Get rid of infinite values
-  test_finite_x = which(is.finite( all_data[[x_data]] ))
-  test_finite_y = which(is.finite( all_data[[y_data]] ))
-  test_finite = intersect(test_finite_x, test_finite_y)
-  all_data = all_data[test_finite,]
-
-  padding = 0.05
-  scatter_values = c(all_data[[x_data]], all_data[[y_data]])
-  ## Get rid of any infinite values
-  finite_values = which(is.finite(scatter_values))
-  scatter_values = scatter_values[finite_values]
-  x_min = min(scatter_values, na.rm = TRUE)
-  x_max = max(scatter_values, na.rm = TRUE)
-  y_min = min(scatter_values, na.rm = TRUE)
-  y_max = max(scatter_values, na.rm = TRUE)
-  all_max = max(abs(c(x_max, y_max, x_min, y_min)), na.rm = TRUE)
-  all_range = 2*all_max
-  all_max = all_max + padding*all_range
-  all_min = -all_max
-
-  p = ggplot2::ggplot(data = all_data, ggplot2::aes_string(x = x_data,
-                      y = y_data, colour = 'cross', text = 'merge')) +
-    ggplot2::geom_point(size=2) +
-    ggplot2::geom_abline(slope = 1, intercept = 0, size = .25) +
-    ggplot2::coord_fixed() +
-    ggplot2::scale_x_continuous(limits = c(all_min, all_max)) +
-    ggplot2::scale_y_continuous(limits = c(all_min, all_max)) +
-    ggplot2::coord_fixed()
-
-  if(parameter == 'log10_GR50') {
-    p = p + ggplot2::ggtitle("GR50 Scatterplot (log10)") +
-      ggplot2::labs(colour = "") + ggplot2::xlab("log10(GR50)") +
-      ggplot2::ylab("log10(GR50)")
-  } else if(parameter == 'log10_IC50') {
-    p = p + ggplot2::ggtitle("IC50 Scatterplot (log10)") +
-      ggplot2::labs(colour = "") + ggplot2::xlab("log10(IC50)") +
-      ggplot2::ylab("log10(IC50)")
-  } else if(parameter == 'log2_h_GR') {
-    p = p + ggplot2::ggtitle("Hill Slope (h_GR) Scatterplot (log2)") +
-      ggplot2::labs(colour = "") + ggplot2::xlab("log2(h_GR)") +
-      ggplot2::ylab("log2(h_GR)")
-  } else if(parameter == 'log2h') {
-    p = p + ggplot2::ggtitle("Hill Slope (h) Scatterplot (log2)") +
-      ggplot2::labs(colour = "") + ggplot2::xlab("log2(h)") +
-      ggplot2::ylab("log2(h)")
+  if(xaxis %in% c("GR50", "GEC50", "GEC50_1", "GEC50_2", "IC50", "EC50", "EC50_1", "EC50_2")) {
+    parameterTable %<>% dplyr::filter(!!xaxis_sym > 0 & !!xaxis_sym < Inf)
+    xaxis_f = expr(log10(!!xaxis_sym))
+    min_x = min(log10(parameterTable[[xaxis]]), na.rm = T)
+    max_x = max(log10(parameterTable[[xaxis]]), na.rm = T)
+  } else if(as.character(xaxis) %in% c("h", "h_GR")) {
+    parameterTable %<>% dplyr::filter(!!xaxis_sym > 0 & !!xaxis_sym < Inf)
+    xaxis_f = expr(log2(!!xaxis_sym))
+    min_x = min(log2(parameterTable[[xaxis]]), na.rm = T)
+    max_x = max(log2(parameterTable[[xaxis]]), na.rm = T)
   } else {
-    p = p + ggplot2::ggtitle(paste(parameter, "Scatterplot")) +
-      ggplot2::labs(colour = "") + ggplot2::xlab(parameter) +
-      ggplot2::ylab(parameter)
+    parameterTable %<>% dplyr::filter(!!xaxis_sym > -Inf & !!xaxis_sym < Inf)
+    xaxis_f = expr(!!xaxis_sym)
+    min_x = min(parameterTable[[xaxis]], na.rm = T)
+    max_x = max(parameterTable[[xaxis]], na.rm = T)
   }
-  if(plotly == TRUE) {
+
+  if(as.character(yaxis) %in% c("GR50", "GEC50", "GEC50_1", "GEC50_2", "IC50", "EC50",
+                                "EC50_1", "EC50_2")) {
+    parameterTable %<>% dplyr::filter(!!yaxis_sym > 0 & !!yaxis_sym < Inf)
+    yaxis_f = expr(log10(!!yaxis_sym))
+    min_y = min(log10(parameterTable[[yaxis]]), na.rm = T)
+    max_y = max(log10(parameterTable[[yaxis]]), na.rm = T)
+  } else if(as.character(yaxis) %in% c("h", "h_GR")) {
+    parameterTable %<>% dplyr::filter(!!yaxis_sym > 0 & !!yaxis_sym < Inf)
+    yaxis_f = expr(log2(!!yaxis_sym))
+    min_y = min(log2(parameterTable[[yaxis]]), na.rm = T)
+    max_y = max(log2(parameterTable[[yaxis]]), na.rm = T)
+  } else {
+    parameterTable %<>% dplyr::filter(!!yaxis_sym > -Inf & !!yaxis_sym < Inf)
+    yaxis_f = expr(!!yaxis_sym)
+    min_y = min(parameterTable[[yaxis]], na.rm = T)
+    max_y = max(parameterTable[[yaxis]], na.rm = T)
+  }
+  max_plot = max(max_x, max_y)
+  min_plot = min(min_x, min_y)
+  
+  p = ggplot2::ggplot()
+  p = p + ggplot2::geom_point(data = parameterTable, 
+                              ggplot2::aes(x = !!xaxis_f, y = !!yaxis_f, group = experiment, color = !!color))
+  # if(is.null(xaxis_f) && is.null(yaxis_f)) {
+  #   p = p + ggplot2::geom_point(data = parameterTable, 
+  #                               ggplot2::aes(x = !!xaxis_sym, y = !!yaxis_sym, group = experiment, color = !!color))
+  # } else if(!is.null(xaxis_f) && is.null(yaxis_f)) {
+  #   p = p + ggplot2::geom_point(data = parameterTable, 
+  #             ggplot2::aes(x = (!!xaxis_f)(!!xaxis_sym), y = !!yaxis_sym, group = experiment, color = !!color))
+  # } else if(is.null(xaxis_f) && !is.null(yaxis_f)) {
+  #   p = p + ggplot2::geom_point(data = parameterTable, 
+  #                               ggplot2::aes(x = !!xaxis_sym, 
+  #                                            y = !!yaxis_f, group = experiment, color = !!color))
+  # } else {
+  #   p = p + ggplot2::geom_point(data = parameterTable, 
+  #       ggplot2::aes(x = (!!xaxis_f)(!!xaxis_sym), y = (!!yaxis_f)(!!yaxis_sym), group = experiment, color = !!color))
+  # }
+  
+  p = p + #ggplot2::geom_abline(slope = 1, intercept = 0, size = .25) +
+    ggplot2::theme_classic() +
+    #coord_cartesian(xlim = c(min_plot, max_plot), ylim = c(min_plot, max_plot)) +
+    ggplot2::theme(aspect.ratio = 1)
+
+  if(plot_type == "interactive") {
     q = plotly::ggplotly(p)
     return(q)
-  } else {
+  } else if(plot_type == "static") {
     return(p)
   }
+  
+  # if(parameter == "GR50") {
+  #   #data$`log10(GR50)` = log10(data$GR50)
+  #   parameter = "log10_GR50"
+  # }
+  # if(parameter == "IC50") {
+  #   #data$`log10(IC50)` = log10(data$IC50)
+  #   parameter = "log10_IC50"
+  # }
+  # if(parameter == "h_GR") {
+  #   data$`log2(h_GR)` = log2(data$h_GR)
+  #   parameter = "log2(h_GR)"
+  # }
+  # if(parameter == "h") {
+  #   data$`log2(h)` = log2(data$h)
+  #   parameter = "log2(h)"
+  # }
+  # all_data = NULL
+  # for(i in 1:length(xaxis)) {
+  #   xaxis_data = data[data[[variable]] == xaxis[i],]
+  #   yaxis_data = data[data[[variable]] == yaxis[i],]
+  #   # removing the selected xaxis and yaxis values from the "experiment"
+  #   # column for merging
+  #   temp1 = sub(xaxis[i], '', xaxis_data$experiment)
+  #   temp1 = sub('  ', ' ', temp1)
+  #   xaxis_data$merge = temp1
+  # 
+  #   temp2 = sub(yaxis[i], '', yaxis_data$experiment)
+  #   temp2 = sub('  ', ' ', temp2)
+  #   yaxis_data$merge = temp2
+  # 
+  #   merge_data = merge(xaxis_data, yaxis_data, by = 'merge')
+  #   merge_data$cross = as.factor(paste(xaxis[i], 'x', yaxis[i], sep = ' '))
+  #   all_data = rbind(all_data, merge_data)
+  # }
+  # 
+  # x_data = paste0(parameter,'.x')
+  # y_data = paste0(parameter,'.y')
+  # 
+  # ## Get rid of infinite values
+  # test_finite_x = which(is.finite( all_data[[x_data]] ))
+  # test_finite_y = which(is.finite( all_data[[y_data]] ))
+  # test_finite = intersect(test_finite_x, test_finite_y)
+  # all_data = all_data[test_finite,]
+  # 
+  # padding = 0.05
+  # scatter_values = c(all_data[[x_data]], all_data[[y_data]])
+  # ## Get rid of any infinite values
+  # finite_values = which(is.finite(scatter_values))
+  # scatter_values = scatter_values[finite_values]
+  # x_min = min(scatter_values, na.rm = TRUE)
+  # x_max = max(scatter_values, na.rm = TRUE)
+  # y_min = min(scatter_values, na.rm = TRUE)
+  # y_max = max(scatter_values, na.rm = TRUE)
+  # all_max = max(abs(c(x_max, y_max, x_min, y_min)), na.rm = TRUE)
+  # all_range = 2*all_max
+  # all_max = all_max + padding*all_range
+  # all_min = -all_max
+  # 
+  # p = ggplot2::ggplot(data = all_data, ggplot2::aes_string(x = x_data,
+  #                     y = y_data, colour = 'cross', text = 'merge')) +
+  #   ggplot2::geom_point(size=2) +
+  #   ggplot2::geom_abline(slope = 1, intercept = 0, size = .25) +
+  #   ggplot2::coord_fixed() +
+  #   ggplot2::scale_x_continuous(limits = c(all_min, all_max)) +
+  #   ggplot2::scale_y_continuous(limits = c(all_min, all_max)) +
+  #   ggplot2::coord_fixed()
+  # 
+  # if(parameter == 'log10_GR50') {
+  #   p = p + ggplot2::ggtitle("GR50 Scatterplot (log10)") +
+  #     ggplot2::labs(colour = "") + ggplot2::xlab("log10(GR50)") +
+  #     ggplot2::ylab("log10(GR50)")
+  # } else if(parameter == 'log10_IC50') {
+  #   p = p + ggplot2::ggtitle("IC50 Scatterplot (log10)") +
+  #     ggplot2::labs(colour = "") + ggplot2::xlab("log10(IC50)") +
+  #     ggplot2::ylab("log10(IC50)")
+  # } else if(parameter == 'log2_h_GR') {
+  #   p = p + ggplot2::ggtitle("Hill Slope (h_GR) Scatterplot (log2)") +
+  #     ggplot2::labs(colour = "") + ggplot2::xlab("log2(h_GR)") +
+  #     ggplot2::ylab("log2(h_GR)")
+  # } else if(parameter == 'log2h') {
+  #   p = p + ggplot2::ggtitle("Hill Slope (h) Scatterplot (log2)") +
+  #     ggplot2::labs(colour = "") + ggplot2::xlab("log2(h)") +
+  #     ggplot2::ylab("log2(h)")
+  # } else {
+  #   p = p + ggplot2::ggtitle(paste(parameter, "Scatterplot")) +
+  #     ggplot2::labs(colour = "") + ggplot2::xlab(parameter) +
+  #     ggplot2::ylab(parameter)
+  # }
+  # if(plotly == TRUE) {
+  #   q = plotly::ggplotly(p)
+  #   return(q)
+  # } else {
+  #   return(p)
+  # }
 }

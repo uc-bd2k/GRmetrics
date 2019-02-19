@@ -484,15 +484,6 @@
           dplyr::mutate(GEC50 = 10^log10_GEC50) %>%
           dplyr::mutate(log10_GR50 = log10_GEC50*((1-GRinf)/(0.5-GRinf) - 1)^(1/h_GR) ) %>%
           dplyr::mutate(GR50 = 10^log10_GR50 )
-        ## adjust parameters for flat fits
-        # df %<>%
-        #   ### notes: what about log_GR50 and log_GEC50? ask Marc.
-        #   dplyr::mutate(GEC50 = ifelse(fit == "flat", 0, GEC50),
-        #                 GRinf = ifelse(fit == "flat", GRmax, GRinf),
-        #                 ### note: does the second ifelse statement work correctly here?
-        #                 GR50 = ifelse(fit == "flat", ifelse(flat > .5, Inf, -Inf) , GR50),
-        #                 h_GR = ifelse(fit == "flat", 0.01, h_GR)
-        #                 )
       }
     }
     if(grepl("_rel", x)) {
@@ -566,6 +557,49 @@
     
     if(grepl("_GR", x)) { df$flat = data_grp_summ$GR_mean }
     if(grepl("_rel", x)) { df$flat = data_grp_summ$rel_cell_mean }
+    
+    ## adjust parameters for flat fits
+    if(grepl("_GR", x)) { ### GR fits
+      if(grepl("bi_fit", x)) { ### biphasic fits
+        
+      } else { ### sigmoid fits
+        df %<>%
+          dplyr::mutate(
+            GEC50 = case_when(
+              fit == "flat" ~ 0,
+              fit != "flat" ~ GEC50),
+            log10_GEC50 = case_when(
+              fit == "flat" ~ -Inf,
+              fit != "flat" ~ log10_GEC50
+            ),
+            GRinf = case_when(
+              fit == "flat" ~ GRmax,
+              fit != "flat" ~ GRinf
+            ),
+            GR50 = case_when(
+              fit == "flat" & flat >= .5 ~ Inf,
+              fit == "flat" & flat < .5 ~ -Inf,
+              fit != "flat" ~ GR50
+            ),
+            log10_GR50 = case_when(
+              fit == "flat" & flat >= .5 ~ Inf,
+              fit == "flat" & flat < .5 ~ -Inf,
+              fit != "flat" ~ log10_GR50
+            ),
+            h_GR = case_when(
+              fit == "flat" ~ 0.01,
+              fit != "flat" ~ h_GR
+            )
+          )
+      }
+    } else { ### relative cell count fits
+      if(grepl("bi_fit", x)) { ### biphasic fits
+        
+      } else { ### sigmoid fits
+        
+      }
+    }
+
     
     if(x == "sig_fit_GR") { parameters$GR$sigmoid$normal = df }
     if(x == "sig_low_fit_GR") { parameters$GR$sigmoid$low = df }

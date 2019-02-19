@@ -134,6 +134,7 @@ GRbox <- function(fitData, metric = c("GR", "rel_cell"),
       ggplot2::geom_jitter(width = 0.5, show.legend = FALSE,
       ggplot2::aes_string(colour = pointColor)) +
       ggplot2::xlab('') + ggplot2::ylab(parameter)
+    p = p + theme_classic()
     q = plotly::plotly_build(p)
     # Last CRAN version of plotly (3.6.0) uses "q$"
     # Latest github version of plotly (4.3.5) uses "q$x"
@@ -330,6 +331,7 @@ GRbox <- function(fitData, metric = c("GR", "rel_cell"),
                                 xend = (lenA+1)+((lenB-1)/2), yend = lh+bump)
       }
     }
+    p = p + theme_classic()
     return(p)
   }
 }
