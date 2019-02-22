@@ -14,7 +14,7 @@
     } 
     if(!initial_count) {
       log2_rel = with(inputData, log2(cell_count/cell_count__ctrl))
-      log2nn_ctrl = with(inputData, treatment_duration/division_time)
+      log2nn_ctrl = with(inputData, treatment_duration_hrs/division_time)
       GR = 2^(1 + log2_rel/log2nn_ctrl) - 1
     }
     rel_cell_count = with(inputData, cell_count/cell_count__ctrl)
@@ -77,6 +77,7 @@
       # Note: minimum numerator allowed is 1, meaning the case of more dead cells at time0
       # is not allowed. Therefore numerator is always positive, so the denominator, that is
       # the increase or decrease in alive cells, controls the sign.
+      rel_cell_count = cell_count/cell_count__ctrl,
       Dratio = pmax(dead_count - dead_count__time0, 1, na.rm = T)/(cell_count - cell_count__time0),
       Dratio_ctrl = pmax(dead_count__ctrl - dead_count__time0, 1, na.rm = T)/(cell_count__ctrl - cell_count__time0),
       gr = log2(cell_count/cell_count__time0),
@@ -84,8 +85,8 @@
     )
     ## These are slightly different from the formulas in the slide-deck, which are correct?
     inputData %<>% dplyr::mutate(
-      GR_s = 2^( (1 + Dratio)*gr/( (1 + Dratio_ctrl)*gr_ctrl) ) - 1,
-      GR_d = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/time ) - 1
+      GR_static = 2^( (1 + Dratio)*gr/( (1 + Dratio_ctrl)*gr_ctrl) ) - 1,
+      GR_toxic = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/(treatment_duration_hrs/24) ) - 1
     )
     
     inputData %<>% dplyr::mutate(
@@ -105,29 +106,55 @@
                            pmax(dead_count - dead_count__time0, 1, na.rm = T) /(cell_count__time0*log(2)) )
       )
       inputData %<>% dplyr::mutate(
-        GR_s = ifelse(!Eqidx, GR_s,
+        GR_static = ifelse(!Eqidx, GR_static,
                       2^((gr + Dratio_gr)/((1 + Dratio_ctrl)*gr_ctrl))-1),
-        GR_d = ifelse(!Eqidx, GR_d,
-                      2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/time)-1)
+        GR_toxic = ifelse(!Eqidx, GR_toxic,
+                      2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/(treatment_duration_hrs/24))-1)
       )
     }
     
     inputData %<>% dplyr::mutate(
-      GR_combined = GR_s + GR_d,
-      GR_naive = 2^(gr/gr_ctrl) - 1
+      GR_static_plus_toxic = GR_static + GR_toxic,
+      GRvalue = 2^(gr/gr_ctrl) - 1,
+      fraction_dead = dead_count/(dead_count + cell_count),
+      fraction_dead__ctrl = dead_count__ctrl/(dead_count__ctrl + cell_count__ctrl)
     )
-    inputData$log10_concentration = log10(inputData$concentration)
+    inputData %<>% dplyr::mutate(
+      increase_fraction_dead = fraction_dead - fraction_dead__ctrl,
+      log10_concentration = log10(concentration),
+      treated_cell_doublings = gr,
+      ctrl_cell_doublings = gr_ctrl
+    )
     tmp<-inputData[,groupingVariables, drop = FALSE]
     experimentNew = (apply(tmp,1, function(x) (paste(x,collapse=" "))))
-    # if(cap == TRUE) {
-    #   inputData$GRvalue[inputData$GRvalue > 1] = 1
-    #   inputData$rel_cell_count[inputData$rel_cell_count > 1] = 1
-    # }
+    if(cap == TRUE) {
+      inputData %<>% dplyr::mutate(
+        GRvalue = pmin(GRvalue, 1),
+        rel_cell_count = pmin(rel_cell_count, 1),
+        GR_static = pmin(GR_static, 1),
+        GR_toxic = pmin(GR_toxic, 0)
+      )
+      inputData$GRvalue[inputData$GRvalue > 1] = 1
+      inputData$rel_cell_count[inputData$rel_cell_count > 1] = 1
+    }
     if(length(groupingVariables) > 0) {
       inputData$experiment = experimentNew
     } else {
       inputData$experiment = "All Data"
     }
+    ### choose columns for output
+    cols_df = colnames(inputData)
+    cols_order = c("experiment", groupingVariables, "concentration",
+                   "log10_concentration",
+                   "cell_count__time0", "dead_count__time0", "cell_count", "dead_count",
+                   "cell_count__ctrl", "dead_count__ctrl", "GRvalue", "GR_static", "GR_toxic",
+                   "fraction_dead", "fraction_dead__ctrl", "increase_fraction_dead",
+                   "rel_cell_count", "treated_cell_doublings", "ctrl_cell_doublings"
+                   )
+    cols_order = cols_order[cols_order %in% cols_df]
+    cols_left = setdiff(cols_df, cols_order)
+    #inputData = inputData[,c(cols_order, cols_left)]
+    inputData = inputData[,cols_order]
     return(inputData)
   }
 }

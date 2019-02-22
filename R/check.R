@@ -10,7 +10,7 @@
     ### check input
     counts = c("dead_count__time0", "cell_count__time0", "cell_count", 
                "dead_count", "dead_count__ctrl", "cell_count__ctrl")
-    counts = c(counts, "concentration", "time")
+    counts = c(counts, "concentration", "treatment_duration_hrs")
     if(sum(!counts %in% colnames(inputData)) != 0) {
       missing = counts[!counts %in% colnames(inputData)]
       missing = paste0(missing, collapse = ", ")
