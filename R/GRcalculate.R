@@ -14,7 +14,7 @@
     } 
     if(!initial_count) {
       log2_rel = with(inputData, log2(cell_count/cell_count__ctrl))
-      log2nn_ctrl = with(inputData, treatment_duration_hrs/division_time)
+      log2nn_ctrl = with(inputData, treatment_duration__hrs/division_time)
       GR = 2^(1 + log2_rel/log2nn_ctrl) - 1
     }
     rel_cell_count = with(inputData, cell_count/cell_count__ctrl)
@@ -86,7 +86,7 @@
     ## These are slightly different from the formulas in the slide-deck, which are correct?
     inputData %<>% dplyr::mutate(
       GR_static = 2^( (1 + Dratio)*gr/( (1 + Dratio_ctrl)*gr_ctrl) ) - 1,
-      GR_toxic = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/(treatment_duration_hrs/24) ) - 1
+      GR_toxic = 2^( ( (Dratio_ctrl)*gr_ctrl - (Dratio)*gr )/(treatment_duration__hrs/24) ) - 1
     )
     
     inputData %<>% dplyr::mutate(
@@ -109,7 +109,7 @@
         GR_static = ifelse(!Eqidx, GR_static,
                       2^((gr + Dratio_gr)/((1 + Dratio_ctrl)*gr_ctrl))-1),
         GR_toxic = ifelse(!Eqidx, GR_toxic,
-                      2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/(treatment_duration_hrs/24))-1)
+                      2^(((Dratio_ctrl)*gr_ctrl - Dratio_gr)/(treatment_duration__hrs/24))-1)
       )
     }
     

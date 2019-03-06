@@ -5,12 +5,12 @@
   caseA = c('concentration', 'cell_count', 'cell_count__ctrl',
             'cell_count__time0')
   caseA_div_time = c('concentration', 'cell_count','cell_count__ctrl',
-                     'treatment_duration','division_time')
+                     'treatment_duration__hrs','division_time')
   if(case == "static_vs_toxic") {
     ### check input
     counts = c("dead_count__time0", "cell_count__time0", "cell_count", 
                "dead_count", "dead_count__ctrl", "cell_count__ctrl")
-    counts = c(counts, "concentration", "treatment_duration_hrs")
+    counts = c(counts, "concentration", "treatment_duration__hrs")
     if(sum(!counts %in% colnames(inputData)) != 0) {
       missing = counts[!counts %in% colnames(inputData)]
       missing = paste0(missing, collapse = ", ")
@@ -26,7 +26,7 @@
       'cell_count__ctrl', and 'cell_count__time0' in inputData. If 
       initial cell count (cell_count__time0) is not available, the assay 
       duration and division time of cells can be used instead in columns 
-      labeled 'treatment_duration' and 'division_time'"
+      labeled 'treatment_duration__hrs' and 'division_time'"
       return(list(message, initial_count))
     }
     num_cols = intersect(input_cols, union(caseA, caseA_div_time))
@@ -40,16 +40,16 @@
     }
     cond1 = 'cell_count__time0' %in% colnames(inputData)
     cond2 = length(intersect(colnames(inputData), 
-                             c('treatment_duration','division_time'))) == 2
+                             c('treatment_duration__hrs','division_time'))) == 2
     if(cond1) {
       initial_count = TRUE
       if(cond2) {
-        warning("Initial cell count given, ignoring columns 'treatment_duration' and 
+        warning("Initial cell count given, ignoring columns 'treatment_duration__hrs' and 
                 'division_time' for calculation of GR values.")
       }
     } else {
         if(!cond2) {
-          message = "Need initial cell count or treatment_duration and division
+          message = "Need initial cell count or treatment_duration__hrs and division
           time for control cells."
         }
         initial_count = FALSE
@@ -65,13 +65,13 @@
       # check for time 0 cell counts
       if(sum(inputData$time == 0) == 0) {
         initial_count = FALSE
-        if(length(intersect(colnames(inputData), c('treatment_duration',
+        if(length(intersect(colnames(inputData), c('treatment_duration__hrs',
                                                    'division_time'))) != 2) {
-          message = "Need initial cell count or treatment_duration and division 
+          message = "Need initial cell count or treatment_duration__hrs and division 
           time for control cells."
         }
       } else {
-        if(length(intersect(colnames(inputData), c('treatment_duration',
+        if(length(intersect(colnames(inputData), c('treatment_duration__hrs',
                                                    'division_time'))) == 2) {
           message = "You have provided both time 0 cell counts and division 
           times. Please provide one or the other."

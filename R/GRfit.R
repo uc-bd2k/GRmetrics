@@ -103,7 +103,7 @@
 #' To use division rate instead of initial cell count,
 #' inputData should not have any initial cell counts (i.e. For Case "A", no 
 #' "cell_count__time0" column. For Case "B", no values of 0 in the "time" 
-#' column) and should instead have two columns "treatment_duration" and 
+#' column) and should instead have two columns "treatment_duration__hrs" and 
 #' "division_time".
 #' 
 #' In the first column, "treatment duration", one should have the duration of 

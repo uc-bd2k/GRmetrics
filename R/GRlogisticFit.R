@@ -544,6 +544,7 @@
         #column with lists of parametersdata_grp_summ$bi_fit_GR
         bi_50 = function(xx,pp) { opfct_bi(x = xx, p = pp) - 0.5 }
         GR50_temp = sapply(data_grp_summ$bi_fit_GR, function(yy) {
+          if(!is.numeric(yy$par)) return(NA)
           ret = try( uniroot(bi_50, pp = yy$par, interval = c(-8,6), tol = 10e-8)$root )
           if(class(ret) == "numeric") {
             return(ret)
