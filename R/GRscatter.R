@@ -90,6 +90,8 @@ GRscatter = function(fitData,
   yaxis_sym = sym(yaxis)
   
   parameter_list = GRmetrics::GRgetMetrics(fitData)[[metric]]
+  if(fit == "static") { parameterTable =  parameter_list$sigmoid$static }
+  if(fit == "toxic") { parameterTable =  parameter_list$sigmoid$toxic }
   if(fit == "sigmoid") { parameterTable =  parameter_list$sigmoid$normal }
   if(fit == "sigmoid_high") { parameterTable =  parameter_list$sigmoid$high }
   if(fit == "sigmoid_low") { parameterTable =  parameter_list$sigmoid$low }

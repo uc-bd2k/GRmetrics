@@ -73,6 +73,8 @@ GRbox <- function(fitData, metric = c("GR", "rel_cell"),
   #              t(SummarizedExperiment::assay(fitData)))
   metric = metric[1]
   parameter_list = GRmetrics::GRgetMetrics(fitData)[[metric]]
+  if(fit == "static") { parameterTable =  parameter_list$sigmoid$static }
+  if(fit == "toxic") { parameterTable =  parameter_list$sigmoid$toxic }
   if(fit == "sigmoid") { parameterTable =  parameter_list$sigmoid$normal }
   if(fit == "sigmoid_high") { parameterTable =  parameter_list$sigmoid$high }
   if(fit == "sigmoid_low") { parameterTable =  parameter_list$sigmoid$low }
@@ -82,9 +84,9 @@ GRbox <- function(fitData, metric = c("GR", "rel_cell"),
   #bottom_margin = max(nchar(data[[groupVariable]]), na.rm = TRUE)
   data[[groupVariable]] = factor(data[[groupVariable]])
   if(!identical(factors, "all")) {
-    if(length(intersect(factors, data[[groupVariable]])) != length(factors)) {
-      stop('Factors must be values of the grouping variable')
-    }
+    # if(length(intersect(factors, data[[groupVariable]])) != length(factors)) {
+    #   stop('Factors must be values of the grouping variable')
+    # }
     data = data[data[[groupVariable]] %in% factors, ]
     #bottom_margin = max(nchar(factors), na.rm = TRUE)
   }
