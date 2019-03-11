@@ -73,19 +73,19 @@ GRscatter = function(fitData,
   assertthat::assert_that(color %in% c(group_vars, "experiment"))
   color = sym(color)
   
-  assertthat::assert_that(metric %in% c("GR", "rel_cell"))
-  assertthat::assert_that(fit %in% c("sigmoid", "biphasic", "sigmoid_high", "sigmoid_low"))
-  if(metric == "GR" && fit %in% c("sigmoid", "sigmoid_high", "sigmoid_low")) {
-    param_choices = c("GRinf", "GRmax", "GR50", "GEC50", "h_GR", "GR_AOC")
-  } else if(metric == "GR" && fit == "biphasic") {
-    param_choices = c("GRinf_1", "GRinf_2", "GEC50_1", "GEC50_2")
-  } else if(metric == "rel_cell" && fit %in% c("sigmoid", "sigmoid_high", "sigmoid_low")) {
-    param_choices = c("Einf", "Emax", "IC50", "EC50", "h", "AUC")
-  } else if(metric == "rel_cell" && fit == "biphasic") {
-    param_choices = c("Einf_1", "Einf_2", "EC50_1", "EC50_2")
-  }
-  assertthat::assert_that(xaxis %in% param_choices)
-  assertthat::assert_that(yaxis %in% param_choices)
+  # assertthat::assert_that(metric %in% c("GR", "rel_cell"))
+  # assertthat::assert_that(fit %in% c("sigmoid", "biphasic", "sigmoid_high", "sigmoid_low"))
+  # if(metric == "GR" && fit %in% c("sigmoid", "sigmoid_high", "sigmoid_low")) {
+  #   param_choices = c("GRinf", "GRmax", "GR50", "GEC50", "h_GR", "GR_AOC")
+  # } else if(metric == "GR" && fit == "biphasic") {
+  #   param_choices = c("GRinf_1", "GRinf_2", "GEC50_1", "GEC50_2")
+  # } else if(metric == "rel_cell" && fit %in% c("sigmoid", "sigmoid_high", "sigmoid_low")) {
+  #   param_choices = c("Einf", "Emax", "IC50", "EC50", "h", "AUC")
+  # } else if(metric == "rel_cell" && fit == "biphasic") {
+  #   param_choices = c("Einf_1", "Einf_2", "EC50_1", "EC50_2")
+  # }
+  # assertthat::assert_that(xaxis %in% param_choices)
+  # assertthat::assert_that(yaxis %in% param_choices)
   xaxis_sym = sym(xaxis)
   yaxis_sym = sym(yaxis)
   
@@ -103,7 +103,7 @@ GRscatter = function(fitData,
     xaxis_f = expr(log10(!!xaxis_sym))
     min_x = min(log10(parameterTable[[xaxis]]), na.rm = T)
     max_x = max(log10(parameterTable[[xaxis]]), na.rm = T)
-  } else if(as.character(xaxis) %in% c("h", "h_GR")) {
+  } else if(as.character(xaxis) %in% c("h", "h_1", "h_2", "h_GR", "h_GR_1", "h_GR_2")) {
     parameterTable %<>% dplyr::filter(!!xaxis_sym > 0 & !!xaxis_sym < Inf)
     xaxis_f = expr(log2(!!xaxis_sym))
     min_x = min(log2(parameterTable[[xaxis]]), na.rm = T)
@@ -121,7 +121,7 @@ GRscatter = function(fitData,
     yaxis_f = expr(log10(!!yaxis_sym))
     min_y = min(log10(parameterTable[[yaxis]]), na.rm = T)
     max_y = max(log10(parameterTable[[yaxis]]), na.rm = T)
-  } else if(as.character(yaxis) %in% c("h", "h_GR")) {
+  } else if(as.character(yaxis) %in% c("h", "h_1", "h_2", "h_GR", "h_GR_1", "h_GR_2")) {
     parameterTable %<>% dplyr::filter(!!yaxis_sym > 0 & !!yaxis_sym < Inf)
     yaxis_f = expr(log2(!!yaxis_sym))
     min_y = min(log2(parameterTable[[yaxis]]), na.rm = T)

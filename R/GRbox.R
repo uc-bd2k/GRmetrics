@@ -91,25 +91,38 @@ GRbox <- function(fitData, metric = c("GR", "rel_cell"),
   if(length(intersect(wilA, wilB)) > 0) {
     stop('wilA and wilB must not overlap.')
   }
-  if(parameter == "GR50") {
-    #data$`log10(GR50)` = log10(data$GR50)
-    parameter = "log10_GR50"
+  # if(parameter == "GR50") {
+  #   #data$`log10(GR50)` = log10(data$GR50)
+  #   parameter = "log10_GR50"
+  # }
+  # if(parameter == "IC50") {
+  #   #data$`log10(IC50)` = log10(data$IC50)
+  #   parameter = "log10_IC50"
+  # }
+  # if(parameter == "h_GR") {
+  #   data$`log2(h_GR)` = log2(data$h_GR)
+  #   parameter = "log2(h_GR)"
+  # }
+  # if(parameter == "h") {
+  #   data$`log2(h)` = log2(data$h)
+  #   parameter = "log2(h)"
+  # }
+  parameter_sym = sym(parameter)
+  if(as.character(parameter) %in% c("GR50", "GEC50", "GEC50_1", "GEC50_2", "IC50", "EC50",
+                                "EC50_1", "EC50_2")) {
+    data %<>% dplyr::filter(!!parameter_sym > 0 & !!parameter_sym < Inf)
+    parameter_f = expr(log10(!!parameter_sym))
+  } else if(as.character(parameter) %in% c("h", "h_1", "h_2", "h_GR", "h_GR_1", "h_GR_2")) {
+    data %<>% dplyr::filter(!!parameter_sym > 0 & !!parameter_sym < Inf)
+    parameter_f = expr(log2(!!parameter_sym))
+  } else {
+    data %<>% dplyr::filter(!!parameter_sym > -Inf & !!parameter_sym < Inf)
+    parameter_f = expr(!!parameter_sym)
   }
-  if(parameter == "IC50") {
-    #data$`log10(IC50)` = log10(data$IC50)
-    parameter = "log10_IC50"
-  }
-  if(parameter == "h_GR") {
-    data$`log2(h_GR)` = log2(data$h_GR)
-    parameter = "log2(h_GR)"
-  }
-  if(parameter == "h") {
-    data$`log2(h)` = log2(data$h)
-    parameter = "log2(h)"
-  }
+  
   # Get rid of infinite values
-  fin = is.finite(data[[parameter]])
-  data = data[fin,]
+  # fin = is.finite(data[[parameter]])
+  # data = data[fin,]
   if(!is.null(wilA) & !is.null(wilB)) {
     for(i in 1:length(wilB)) {
       data[[groupVariable]] = stats::relevel(data[[groupVariable]], wilB[i])
@@ -126,14 +139,15 @@ GRbox <- function(fitData, metric = c("GR", "rel_cell"),
     wil = wilcox.test(x = wil_dataA, y = wil_dataB, alternative = "two.sided")
     wil_pval = prettyNum(wil$p.value, digits = 2)
   }
+
+  group_sym = sym(groupVariable)
+  color = sym(pointColor)
   if(plotly == TRUE) {
-    p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
-                          y = parameter, text = 'experiment'))
-    p = p + ggplot2::geom_boxplot(ggplot2::aes_string(fill = groupVariable,
-                  alpha = 0.3), outlier.color = NA, show.legend = FALSE) +
-      ggplot2::geom_jitter(width = 0.5, show.legend = FALSE,
-      ggplot2::aes_string(colour = pointColor)) +
-      ggplot2::xlab('') + ggplot2::ylab(parameter)
+    p = ggplot2::ggplot(data = data)
+    p = p + ggplot2::geom_boxplot(ggplot2::aes(x = !!group_sym, y = !!parameter_f, group = experiment, fill = !!group_sym),
+                  alpha = 0.3, outlier.color = NA, show.legend = FALSE) +
+      ggplot2::geom_jitter(width = 0.5, show.legend = FALSE, ggplot2::aes(x = !!group_sym, y = !!parameter_f, group = experiment, colour = !!color)) +
+      ggplot2::xlab('')
     p = p + theme_classic()
     q = plotly::plotly_build(p)
     # Last CRAN version of plotly (3.6.0) uses "q$"
@@ -245,16 +259,13 @@ GRbox <- function(fitData, metric = c("GR", "rel_cell"),
     }
     
   } else {
-    p <- ggplot2::ggplot(data, ggplot2::aes_string(x = groupVariable,
-                                                   y = parameter))
-    p = p + ggplot2::geom_boxplot(ggplot2::aes_string(
-      fill = groupVariable, alpha = 0.3), outlier.color = NA,
-      show.legend = FALSE) + ggplot2::geom_jitter(
-        width = 0.5, ggplot2::aes_string(colour = pointColor)) +
-      ggplot2::xlab('') + ggplot2::ylab(parameter) +
-      ggplot2::theme_grey(base_size = 14) +
-      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, 
-                                                         vjust = 1, hjust=1))
+    p = ggplot2::ggplot(data = data)
+    p = p + ggplot2::geom_boxplot(ggplot2::aes(x = !!group_sym, y = !!parameter_f, group = experiment, fill = !!group_sym),
+                                  alpha = 0.3, outlier.color = NA, show.legend = FALSE) +
+      ggplot2::geom_jitter(width = 0.5, show.legend = FALSE, ggplot2::aes(x = !!group_sym, y = !!parameter_f, group = experiment, colour = !!color)) +
+      ggplot2::xlab('')  #+
+      # ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, 
+      #                                                    vjust = 1, hjust=1))
     if(!is.null(wilA) & !is.null(wilB)) {
       q = plotly::plotly_build(p)
       # Last CRAN version of plotly (3.6.0) uses "q$"
