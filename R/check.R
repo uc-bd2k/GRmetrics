@@ -58,12 +58,12 @@
   if(case == "B") {
     # check for correct input columns
     if(length(intersect(colnames(inputData), c('concentration', 'cell_count',
-                                               'time'))) != 3) {
+                                               'treatment_duration__hrs'))) != 3) {
       message = "There must be columns named 'concentration', 'cell_count',
-      and 'time' in inputData"
+      and 'treatment_duration__hrs' in inputData"
     } else {
       # check for time 0 cell counts
-      if(sum(inputData$time == 0) == 0) {
+      if(sum(inputData$treatment_duration__hrs == 0) == 0) {
         initial_count = FALSE
         if(length(intersect(colnames(inputData), c('treatment_duration__hrs',
                                                    'division_time'))) != 2) {

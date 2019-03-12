@@ -5,10 +5,10 @@
     delete_cols = which(colnames(inputData) %in% c('concentration',
                                                    'cell_count'))
     keys = colnames(inputData)[-delete_cols]
-    time0 = inputData[inputData$time == 0, c(keys, 'cell_count')]
-    ctrl = inputData[inputData$concentration == 0 & inputData$time > 0,
+    time0 = inputData[inputData$treatment_duration__hrs == 0, c(keys, 'cell_count')]
+    ctrl = inputData[inputData$concentration == 0 & inputData$treatment_duration__hrs > 0,
                      c(keys, 'cell_count')]
-    data = inputData[inputData$concentration != 0 & inputData$time > 0, ]
+    data = inputData[inputData$concentration != 0 & inputData$treatment_duration__hrs > 0, ]
     time0_keys = NULL
     ctrl_keys = NULL
     for(i in 1:length(keys)) {
