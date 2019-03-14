@@ -347,6 +347,8 @@
       ec50_low = log10(max(c(min(unlist(conc)) * 1e-4, 1e-7))) ,
       ec50_high = log10(min(c(max(unlist(conc)) * 1e2, 1e2))) 
     ) %>%
+    ###### GR curve priors/bounds
+    ### priors and upper/lower bounds for biphasic fit (GR)
     dplyr::mutate(
       p_bi_GR = list ( tibble::tribble(
         ~parameter,                 ~lower,     ~prior,             ~upper,
@@ -357,6 +359,29 @@
         "log10_GEC50_2",        log10(0.3),   log10(1),          ec50_high,
         "h_GR_2",                       0.025,          2,                  5
       ) ),
+      ### priors and upper/lower bounds for sigmoid fit (GR)
+      p_sig_GR = list( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,    ~upper,
+        "GRinf",                       -1,        0.1,         1, 
+        "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
+        "h_GR",                         0.1,          2,         5
+      ) ),
+      ### priors and upper/lower bounds for low/early sigmoid fit (GR)
+      p_sig_GR_low = list( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,    ~upper,
+        "GRinf",                     -.05,        0.1,            1, 
+        "log10_GEC50",          ec50_low, median(unlist(cc)),   log10(1),
+        "h_GR",                       0.025,          2,          5
+      ) ),
+      ### priors and upper/lower bounds for high/late sigmoid fit (GR)
+      p_sig_GR_high = list( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,    ~upper,
+        "GRinf",                       -1,       -0.1,        0.5, 
+        "log10_GEC50",            log10(0.3),   log10(1),   ec50_high,
+        "h_GR",                       0.025,          2,      5
+      ) ),
+      ####### Relative cell count curve priors/bounds
+      ### priors and upper/lower bounds for biphasic fit (relative cell count)
       p_bi_rel = list ( tibble::tribble(
         ~parameter,                 ~lower,     ~prior,             ~upper,
         "Einf_1",                      0.5,       0.75,                  1, 
@@ -366,30 +391,26 @@
         "log10_EC50_2",        log10(0.3),   log10(1),          ec50_high,
         "h_2",                       0.025,          2,                  5
       ) ),
-      p_sig_GR = list( tibble::tribble(
-        ~parameter,                 ~lower,     ~prior,    ~upper,
-        "GRinf",                       -1,        0.1,         1, 
-        "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
-        "h_GR",                         0.1,          2,         5
-      ) ),
-      p_sig_GR_low = list( tibble::tribble(
-        ~parameter,                 ~lower,     ~prior,    ~upper,
-        "GRinf",                       -1,        0.1,         1, 
-        "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
-        "h_GR",                         0.1,          2,         5
-      ) ),
-      p_sig_GR_high = list( tibble::tribble(
-        ~parameter,                 ~lower,     ~prior,    ~upper,
-        "GRinf",                       -1,        0.1,         1, 
-        "log10_GEC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
-        "h_GR",                         0.1,          2,         5
-      ) ),
-      
+      ### priors and upper/lower bounds for sigmoid fit (relative cell count)
       p_sig_rel = list ( tibble::tribble(
         ~parameter,                 ~lower,     ~prior,    ~upper,
         "Einf",                        0,        0.1,         1, 
         "log10_EC50", min(unlist(cc))-2, median(unlist(cc)), max(unlist(cc))+2,
         "h",                         0.1,          2,         5
+      ) ),
+      ### priors and upper/lower bounds for low/early sigmoid fit (relative cell count)
+      p_sig_rel_low = list ( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,         ~upper,
+        "Einf",                      0.5,       0.75,              1, 
+        "log10_EC50",          ec50_low, median(unlist(cc)),   log10(1),
+        "h",                       0.025,          2,              5
+      ) ),
+      ### priors and upper/lower bounds for high/late sigmoid fit (relative cell count)
+      p_sig_rel_high = list ( tibble::tribble(
+        ~parameter,                 ~lower,     ~prior,    ~upper,
+        "Einf",                        0,       0.25,       0.5, 
+        "log10_EC50",        log10(0.3),   log10(1),      ec50_high,
+        "h",                       0.025,          2,         5
       ) )
     )
   #yexp_bi = data_exp$GRvalue
@@ -440,9 +461,7 @@
   if(fits$GR$sigmoid$low) {
     ## Fit low sigmoidal fit (GR)
     data_grp_summ$sig_low_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
-      param_df = data_grp_summ$p_bi_GR[[i]][1:3,]
-      ## remove "_1" and "_2" from parameter names
-      param_df %<>% dplyr::mutate(parameter = gsub("_1$", "", parameter))
+      param_df = data_grp_summ$p_sig_GR_low[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$GRvalue[[i]]
       startVec = param_df$prior
@@ -462,9 +481,7 @@
   if(fits$GR$sigmoid$high) {
     ## Fit high sigmoidal fit (GR)
     data_grp_summ$sig_high_fit_GR = lapply(1:dim(data_grp_summ)[1], function(i) {
-      param_df = data_grp_summ$p_bi_GR[[i]][4:6,]
-      ## remove "_1" and "_2" from parameter names
-      param_df %<>% dplyr::mutate(parameter = gsub("_2$", "", parameter))
+      param_df = data_grp_summ$p_sig_GR_high[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$GRvalue[[i]]
       startVec = param_df$prior
@@ -484,9 +501,7 @@
   if(fits$rel_cell$sigmoid$low) {
     ## Fit low sigmoidal fit (relative cell count)
     data_grp_summ$sig_low_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
-      param_df = data_grp_summ$p_bi_rel[[i]][1:3,]
-      ## remove "_1" and "_2" from parameter names
-      param_df %<>% dplyr::mutate(parameter = gsub("_1$", "", parameter))
+      param_df = data_grp_summ$p_sig_rel_low[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$rel_cell_count[[i]]
       startVec = param_df$prior
@@ -505,9 +520,7 @@
   if(fits$rel_cell$sigmoid$high) {
     ## Fit high sigmoidal fit (relative cell count)
     data_grp_summ$sig_high_fit_rel = lapply(1:dim(data_grp_summ)[1], function(i) {
-      param_df = data_grp_summ$p_bi_rel[[i]][4:6,]
-      ## remove "_1" and "_2" from parameter names
-      param_df %<>% dplyr::mutate(parameter = gsub("_2$", "", parameter))
+      param_df = data_grp_summ$p_sig_rel_high[[i]]
       xx = data_grp_summ$concentration[[i]]
       yy = data_grp_summ$rel_cell_count[[i]]
       startVec = param_df$prior
