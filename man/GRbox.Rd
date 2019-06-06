@@ -4,7 +4,8 @@
 \alias{GRbox}
 \title{Boxplots of a given GR metric}
 \usage{
-GRbox(fitData, metric, groupVariable, pointColor, factors = "all",
+GRbox(fitData, metric = c("GR", "rel_cell"), parameter = "GR50",
+  groupVariable, pointColor = NULL, fit = "sigmoid", factors = "all",
   wilA = NULL, wilB = NULL, plotly = TRUE)
 }
 \arguments{
@@ -68,16 +69,9 @@ data("inputCaseA")
 head(inputCaseA)
 # Run GRfit function with case = "A"
 output1 = GRfit(inputData = inputCaseA,
-groupingVariables = c('cell_line','agent', 'perturbation','replicate',
-'time'))
-GRbox(output1, metric ='GRinf',
-groupVariable = 'cell_line', pointColor = 'agent' , factors = c('BT20',
-'MCF10A'))
-GRbox(output1, metric ='GRinf',
-groupVariable = 'cell_line', pointColor = 'cell_line' ,
-factors = c('BT20', 'MCF10A'), plotly = FALSE)
-GRbox(output1, metric = 'GR50', groupVariable = 'cell_line',
-pointColor = 'cell_line', wilA = "BT20", wilB = c("MCF7","MCF10A"))
+groupingVariables = c("cell_line","agent", "perturbation","replicate",
+"time"))
+GRbox(output1, parameter = "GR50", groupVariable = "cell_line")
 }
 \seealso{
 To create the object needed for this function, see
