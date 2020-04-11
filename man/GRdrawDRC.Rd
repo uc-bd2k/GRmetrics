@@ -51,8 +51,8 @@ maximum concentrations of the data, but can be set by the user as well.
 
 By default, curves and points are plotted for all experiments. To specify
 a smaller set of experiments, use the "experiments" parameter. To see the
-names of individual experiments, use
-\code{GRfitObject$parameter_table$experiment}. See the examples below.
+names of individual experiments for a GRfit object \code{fit_example}, see
+\code{colData(fit_example)}. See the examples below.
 }
 \examples{
 # Load Case A (example 1) input
