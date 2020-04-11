@@ -415,8 +415,8 @@
     temp = data[, time0_keys]
     data$key_time0 = apply(temp, 1, function(x) paste(x, collapse = ' '))
 
-    data$cell_count__ctrl = NA
-    data$cell_count__time0 = NA
+    data$cell_count__ctrl = NA_real_
+    data$cell_count__time0 = NA_real_
     for(key in unique(ctrl$key)) {
       trimmed_mean = .trim_mean(ctrl[ctrl$key == key,]$cell_count, 50)
       data[data$key_ctrl == key, 'cell_count__ctrl'] = trimmed_mean
