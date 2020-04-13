@@ -4,8 +4,7 @@
 \alias{GRfit}
 \title{Extract GR parameters from a dataset}
 \usage{
-GRfit(inputData, groupingVariables, case = "A", force = FALSE,
-  cap = FALSE)
+GRfit(inputData, groupingVariables, case = "A", force = FALSE, cap = FALSE)
 }
 \arguments{
 \item{inputData}{a data table in one of the specified formats (Case A or
@@ -171,7 +170,7 @@ case = "C")
 \dontrun{
 # Write GR metrics parameter table to tab-separated text file
 write.table(GRgetMetrics(output1), file = "filename.tsv", quote = FALSE,
-sep = "\\t", row.names = FALSE)
+sep = "\t", row.names = FALSE)
 # Write original data plus GR values to comma-separated file
 write.table(GRgetValues(output1), file = "filename.csv", quote = FALSE,
 sep = ",", row.names = FALSE)

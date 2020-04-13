@@ -49,6 +49,7 @@
 #' and \code{\link{GRscatter}}. For online GR calculator and browser, see
 #' \url{http://www.grcalculator.org}.
 #' @examples
+#' \dontrun{
 #' # Load Case A (example 1) input
 #' data("inputCaseA")
 #' head(inputCaseA)
@@ -64,6 +65,7 @@
 #' factors = c('BT20', 'MCF10A'), plotly = FALSE)
 #' GRbox(output1, metric = 'GR50', groupVariable = 'cell_line',
 #' pointColor = 'cell_line', wilA = "BT20", wilB = c("MCF7","MCF10A"))
+#' }
 #' @export
 
 GRbox <- function(fitData, metric, groupVariable, pointColor,
