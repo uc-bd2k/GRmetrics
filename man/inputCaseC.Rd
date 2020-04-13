@@ -4,7 +4,8 @@
 \name{inputCaseC}
 \alias{inputCaseC}
 \title{Simulated dose-response assay data (Case C)}
-\format{A data frame with 1352 rows and 7 variables:
+\format{
+A data frame with 1352 rows and 7 variables:
 \itemize{
   \item cell_line: the cell-line used (MCF10A, MCF7, BT20)
   \item agent: the drug used (-, drugA, drugB, drugC, drugD)
@@ -16,7 +17,8 @@
   dose-response curves will be evaluated (not log transformed)
   \item cell_count: measure of cell number or a surrogate of the number
   of cells.
-}}
+}
+}
 \source{
 inst/scripts/generate_data.py
 }

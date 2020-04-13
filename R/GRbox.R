@@ -50,6 +50,7 @@
 #' \url{http://www.grcalculator.org}.
 #' @examples
 #' # Load Case A (example 1) input
+#' \dontrun{
 #' data("inputCaseA")
 #' head(inputCaseA)
 #' # Run GRfit function with case = "A"
@@ -64,6 +65,7 @@
 #' factors = c('BT20', 'MCF10A'), plotly = FALSE)
 #' GRbox(output1, metric = 'GR50', groupVariable = 'cell_line',
 #' pointColor = 'cell_line', wilA = "BT20", wilB = c("MCF7","MCF10A"))
+#' }
 #' @export
 
 GRbox <- function(fitData, metric, groupVariable, pointColor,
