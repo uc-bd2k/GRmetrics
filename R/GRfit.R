@@ -1,0 +1,240 @@
+#' Extract GR parameters from a dataset
+#'
+#' This function takes in a dataset with information about concentration,
+#' cell counts over time, and additional grouping variables for a dose-response
+#' assay and calculates growth-rate inhibition (GR) metrics as well as 
+#' traditional metrics (IC50, Emax, etc.) for each experiment
+#' in the dataset. The data must be in a specific format: either that specified
+#' by case "A" or case "C" described in the details below.
+#'
+#' @param inputData a data table in one of the specified formats (Case A or
+#' Case C). See details below for description. See \code{data(inputCaseA)} or
+#' \code{data(inputCaseC)} for example input data frames. See help files for
+#' \code{\link{inputCaseA}} and \code{\link{inputCaseC}} for description of
+#' these examples.
+#' @param groupingVariables a vector of column names from inputData. All of the
+#' columns in inputData except for those identified here will be averaged over.
+#' @param case either "A" or "C", indicating the format of the input data. See
+#' below for descriptions of these formats.
+#' @param force a logical value indicating whether to attempt to "force" a
+#' sigmoidal fit, i.e. whether to allow fits with F-test p-values greater
+#' than .05
+#' @param cap a logical value indicating whether to cap GR values (or 
+#' relative cell counts) at 1. If true, all values greater than 1 will 
+#' be set to 1.
+#' @return A SummarizedExperiment object containing GR metrics 
+#' (GR50, GRmax, etc.) and traditional metrics (IC50, Emax, etc.) 
+#' as well as goodness of fit measures is returned. The
+#' object also contains, in its metadata, a table of the original data
+#' converted to the style of "Case A" (with calculated GR values and relative 
+#' cell counts for each row) and a vector of the grouping variables used for 
+#' the calculation.
+#' @author Nicholas Clark
+#' @details
+#' Calculation of GR values is performed by the function \code{.GRcalculate}
+#' according to the "Online Methods" section of Hafner and Niepel et al.
+#' (2016, \url{http://dx.doi.org/10.1038/nmeth.3853}).
+#'
+#' The fitting of the logistic curve is performed by the \code{.GRlogisticFit}
+#' function, which calls the \code{drm} function from the \code{drc} package
+#' to solve for the curve parameters. The GR curve fit function is
+#' given by f(c) = GRinf + (1 - GRinf)/(1 + (c/GEC50)^h_GR) where c is
+#' concentration. The fit is performed under following constraints: h_GR 
+#' in [.1, 5], GRinf in [-1, 1], and GEC50 in [min(c)*1e-2, max(c)*1e2] (c is
+#' concentration). The initial conditions for the fitting algorithm are h_GR 
+#' = 2, GRinf = 0.1 and GEC50 = median(c). The fitting of the 
+#' traditional dose response curve is done using the same formula, 
+#' replacing GRinf with Einf, GEC50 with EC50, and h_GR with h. The fit is 
+#' performed on the relative cell counts instead of GR values. Also, since the 
+#' traditional dose response curve is bounded between 0 and 1 whereas the 
+#' GR dose response curve is bounded between -1 and 1, we restrict Einf to 
+#' the range [0, 1].
+#'
+#' The parameters of the GR dose response curves (and traditional dose 
+#' response curves) for each experiment are fitted separately. An
+#' F-test is used to compare the sigmoidal fit to a flat line fit. If the
+#' p-value of the F-test is less than .05, the sigmoidal fit is accepted. If
+#' the p-value is greater than or equal to .05, a flat horizontal line fit is
+#' given, with y equal to the mean of the GR values (or relative cell counts 
+#' in the case of the traditional dose response curve). For each flat fit, 
+#' GEC50 (or EC50) is set to 0, h_GR (or h) is set to 0.01, GRinf (or Einf) is
+#' set to the y value of the flat fit, and GR50 (or IC50) is set to +/-Inf 
+#' depending on whether GRinf (or Einf) is greater or less than .5. 
+#'
+#' The mandatory columns for inputData for Case "A" are the following as
+#' well as other grouping columns.
+#'
+#' 1. concentration - column with concentration values (not log transformed)
+#' of the perturbagen on which dose-response curves will be evaluated
+#'
+#' 2. cell_count - column with the measure of cell number (or a surrogate of
+#' cell number) after treatment
+#'
+#' 3. cell_count__time0 - column with initial (Time 0) cell counts - the
+#' measure of cell number in untreated wells grown in parallel until the
+#' time of treatment
+#'
+#' 4. cell_count__ctrl - column with the Control cell count: the measure of
+#' cell number in control (e.g. untreated or DMSO-treated) wells from the
+#' same plate
+#'
+#' All other columns will be treated as additional keys on which the data
+#' will be grouped (e.g. cell_line, drug, time, replicate)
+#'
+#' The mandatory columns for inputData for Case "C" are the following as
+#' well as other grouping columns.
+#'
+#' 1. concentration - column with concentration values (not log transformed)
+#' of the perturbagen on which dose-response curves will be evaluated
+#'
+#' 2. cell_count - column with the measure of cell number (or a surrogate of
+#' cell number)
+#'
+#' 3. time - column with the time at which a cell count is observed
+#'
+#' All other columns will be treated as additional keys on which the data
+#' will be grouped (e.g. cell_line, drug, replicate)
+#' 
+#' GR values and dose-response curves/metrics can also be computed using
+#' division times for (untreated) cell lines in the place of time zero cell
+#' counts, using the first formula in the Supplement of Hafner et al. (2017,
+#' \url{http://dx.doi.org/10.1038/nbt.3882}).
+#' 
+#' To use division rate instead of initial cell count,
+#' inputData should not have any initial cell counts (i.e. For Case "A", no 
+#' "cell_count__time0" column. For Case "C", no values of 0 in the "time" 
+#' column) and should instead have two columns "treatment_duration" and 
+#' "division_time".
+#' 
+#' In the first column, "treatment duration", one should have the duration of 
+#' the assay between time of treatment and the final cell counts (e.g. 72 for 
+#' hours in a typical 3-day assay). In the second column, "division_time", one 
+#' should have the time it takes for one cell doubling to occur in each
+#' (untreated) cell line used under the conditions of the experiment. These 
+#' two columns must contain numbers (no units), but need to refer to the same
+#' units (e.g. hours). In most cases, all experiments of a particular cell 
+#' line would have the same "division_time", however if the division rate of 
+#' untreated cells varied on another parameter, for example seeding density,
+#' it would be appropriate to measure and input division times based on 
+#' cell line/seeding density pairs.
+#' 
+#' 
+#' @note
+#' To see the underlying code, use (\code{getAnywhere(.GRlogistic_3u)}), 
+#' (\code{getAnywhere(.rel_cell_logistic_3u)}),
+#' (\code{getAnywhere(.GRcalculate)}), and (\code{getAnywhere(.GRlogisticFit)})
+#' @seealso See \code{\link{drm}} for the general logistic fit function that
+#' solves for the parameters GRinf, GEC50, and h_GR. See
+#' \code{\link{drmc}} for
+#' options of this function. Use the functions \code{\link{GRdrawDRC}},
+#' \code{\link{GRbox}}, and \code{\link{GRscatter}} to create visualizations
+#' using the output from this function. For online GR calculator and browser,
+#' see \url{http://www.grcalculator.org}.
+#' @references Hafner, M., Niepel, M., Chung, M., and Sorger, P.K.,
+#' "Growth Rate Inhibition Metrics Correct For Confounders In Measuring
+#' Sensitivity To Cancer Drugs". \emph{Nature Methods} 13.6 (2016): 521-527.
+#' \url{http://dx.doi.org/10.1038/nmeth.3853}
+#' @references Hafner, M., Niepel, M., Sorger, P.K.,
+#' "Alternative drug sensitivity metrics improve preclinical cancer
+#' pharmacogenomics". \emph{Nature Biotechnology} 35.6 (2017): 500-502.
+#' \url{http://dx.doi.org/10.1038/nbt.3882}
+#'
+#' @examples
+#' # Load Case A (example 1) input
+#' data("inputCaseA")
+#' head(inputCaseA)
+#' # Run GRfit function with case = "A"
+#' output1 = GRfit(inputData = inputCaseA,
+#' groupingVariables = c('cell_line','agent', 'perturbation','replicate',
+#' 'time'))
+#' # Overview of SummarizedExperiment output data
+#' output1
+#' \dontrun{
+#' # View GR metrics table
+#' View(GRgetMetrics(output1))
+#' # View descriptions of each metric (or goodness of fit measure)
+#' View(GRgetDefs(output1))
+#' # View table of original data (converted to style of Case A) with GR values
+#' # and relative cell counts
+#' View(GRgetValues(output1))
+#' # View vector of grouping variables used for calculation
+#' GRgetGroupVars(output1)
+#' }
+#' # Load Case C (example 4) input
+#' # Same data, different format
+#' data("inputCaseC")
+#' head(inputCaseC)
+#' output4 = GRfit(inputData = inputCaseC,
+#' groupingVariables = c('cell_line','agent', 'perturbation','replicate',
+#' 'time'),
+#' case = "C")
+#' # Extract data tables and export to .tsv or .csv
+#' \dontrun{
+#' # Write GR metrics parameter table to tab-separated text file
+#' write.table(GRgetMetrics(output1), file = "filename.tsv", quote = FALSE,
+#' sep = "\t", row.names = FALSE)
+#' # Write original data plus GR values to comma-separated file
+#' write.table(GRgetValues(output1), file = "filename.csv", quote = FALSE,
+#' sep = ",", row.names = FALSE)
+#' }
+#' @export
+
+GRfit = function(inputData, groupingVariables, case = "A",
+                 force = FALSE, cap = FALSE) {
+  if('experiment' %in% colnames(inputData)) {
+    stop("Change name of 'experiment' column.")
+  }
+  input_check = .check(inputData, case)
+  message = input_check[[1]]
+  initial_count = input_check[[2]]
+  if(!is.null(message)) stop(message)
+  inputData = .convert(inputData, case, initial_count, groupingVariables)
+  gr_table = .GRcalculate(inputData, groupingVariables, cap, case,
+                          initial_count)
+  parameter_table = .GRlogisticFit(gr_table, groupingVariables, force, cap)
+
+  colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_rel_cell',
+                                'experiment', 'concentration_points')]
+  rownames(colData) = colData$experiment
+  colData = S4Vectors::DataFrame(colData)
+  
+  Metric = c('ctrl_cell_doublings','GR50','GRmax','GR_AOC','GEC50','GRinf',
+             'h_GR','r2_GR','pval_GR','flat_fit_GR', 
+              'IC50', 'Emax', 'AUC', 'EC50','Einf', 'h', 
+              'r2_rel_cell', 'pval_rel_cell', 'flat_fit_rel_cell')
+  assays = parameter_table[ , Metric]
+  rownames(assays) = parameter_table$experiment
+  assays = t(assays)
+
+  Description = c(
+    "The number of cell doublings in the control population during the assay",
+    "The concentration at which GR(c) = 0.5",
+    "The maximal effect of the drug (minimal GR value)",
+    "The 'Area Over the Curve' - The area between the line GR = 1 and the curve, similar to traditional AUC",
+    "The concentration at half-maximal effect (growth rate normalized)",
+    "The asymptotic effect of the drug (growth rate normalized)",
+    "The Hill coefficient of the fitted (GR) curve, which reflects how steep the (GR) dose response curve is",
+    "The coefficient of determination - essentially how well the (GR) curve fits to the data points",
+    "The p-value of the F-test comparing the fit of the (GR) curve to a horizontal line fit",
+    "For data that doesn't significantly fit better to a curve than a horizontal line fit, the y value (GR) of the flat line", 
+    "The concentration at which relative cell count = 0.5",
+    "The maximal effect of the drug (minimal relative cell count value)",
+    "The 'Area Under the Curve' - The area below the fitted (traditional) dose response curve",
+    "The concentration at half-maximal effect (not growth rate normalized)",
+    "The asymptotic effect of the drug (not growth rate normalized)",
+    "The Hill coefficient of the fitted (traditional) dose response curve, which reflects how steep the (traditional) dose response curve is",
+    "The coefficient of determination - essentially how well the (traditional) curve fits to the data points",
+    "The p-value of the F-test comparing the fit of the (traditional) curve to a horizontal line fit",
+    "For data that doesn't significantly fit better to a curve than a horizontal line fit, the y value (relative cell count) of the flat line"
+                  )
+  rowData = cbind(Metric, Description)
+  rownames(rowData) = Metric
+  rowData = S4Vectors::DataFrame(rowData)
+  rowData$Metric = as.character(rowData$Metric)
+  rowData$Description = as.character(rowData$Description)
+
+  output = SummarizedExperiment::SummarizedExperiment(assays = assays,
+                                                      colData = colData,
+            rowData = rowData, metadata = list(gr_table, groupingVariables))
+  return(output)
+}

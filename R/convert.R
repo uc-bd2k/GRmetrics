@@ -1,4 +1,4 @@
-.convert_new_grp = function(inputData, case, initial_count, groupingVariables) {
+.convert = function(inputData, case, initial_count, groupingVariables) {
   ## if case == "A", don't do anything
   if (case == "A") { return(inputData) }
   ## accept "B" or "C" for long-format case

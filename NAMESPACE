@@ -11,3 +11,5 @@ export(GRscatter)
 
 importFrom("stats", "na.omit")
 importFrom("S4Vectors", "metadata")
+import(dplyr)
+import(magrittr)
