@@ -11,12 +11,12 @@ library(GRmetrics)
 # Load Case C (example 4) input
 data("inputCaseC")
 # Run GRfit function with case = "C"
-output4 = GRfit(inputData = inputCaseC, groupingVariables = c('cell_line','agent', 'perturbation','replicate', 'time'), case = "C")
+output4 = GRfit(inputData = inputCaseC, groupingVariables = c('cell_line','treatment','replicate', 'time'), case = "C")
 
 # Load Case A (example 1) input
 data("inputCaseA")
 # Run GRfit function with case = "A"
-output1 = GRfit(inputData = inputCaseA, groupingVariables = c('cell_line','agent', 'perturbation','replicate', 'time'), case = "A")
+output1 = GRfit(inputData = inputCaseA, groupingVariables = c('cell_line','treatment','replicate', 'time'), case = "A")
 
 # change type integer to numeric for the sake of testing
 metadata(output1)[[1]]$replicate = as.numeric(metadata(output1)[[1]]$replicate)

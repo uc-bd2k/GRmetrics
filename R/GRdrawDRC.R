@@ -45,7 +45,7 @@
 #' data("inputCaseA")
 #' # Run GRfit function with case = "A"
 #' drc_output = GRfit(inputCaseA,
-#' groupingVariables = c('cell_line','agent'))
+#' groupingVariables = c('cell_line','treatment'))
 #' GRdrawDRC(drc_output, experiments = c('BT20 drugA', 'MCF10A drugA',
 #' 'MCF7 drugA'), min = 10^(-4), max = 10^2)
 #' GRdrawDRC(drc_output, plotly = FALSE)

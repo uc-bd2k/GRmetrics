@@ -145,7 +145,7 @@
 #' head(inputCaseA)
 #' # Run GRfit function with case = "A"
 #' output1 = GRfit(inputData = inputCaseA,
-#' groupingVariables = c('cell_line','agent', 'perturbation','replicate',
+#' groupingVariables = c('cell_line','treatment','replicate',
 #' 'time'))
 #' # Overview of SummarizedExperiment output data
 #' output1
@@ -165,7 +165,7 @@
 #' data("inputCaseC")
 #' head(inputCaseC)
 #' output4 = GRfit(inputData = inputCaseC,
-#' groupingVariables = c('cell_line','agent', 'perturbation','replicate',
+#' groupingVariables = c('cell_line','treatment', 'replicate',
 #' 'time'),
 #' case = "C")
 #' # Extract data tables and export to .tsv or .csv

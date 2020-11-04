@@ -24,7 +24,7 @@
 #' head(inputCaseA)
 #' # Run GRfit function with case = "A"
 #' output1 = GRfit(inputData = inputCaseA,
-#' groupingVariables = c('cell_line','agent'))
+#' groupingVariables = c('cell_line','treatment'))
 #' metrics = GRgetMetrics(output1)
 #' \dontrun{View(metrics)}
 #' head(metrics)

@@ -16,6 +16,6 @@ BugReports: https://github.com/uc-bd2k/GRmetrics/issues
 LazyData: TRUE
 Depends: R (>= 4.0), SummarizedExperiment, dplyr, magrittr
 Imports: drc, plotly, ggplot2, S4Vectors, stats
-RoxygenNote: 7.1.0
+RoxygenNote: 7.1.1
 Suggests: knitr, rmarkdown, BiocStyle, tinytex
 VignetteBuilder: knitr

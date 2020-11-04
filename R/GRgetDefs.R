@@ -23,7 +23,7 @@
 #' head(inputCaseA)
 #' # Run GRfit function with case = "A"
 #' output1 = GRfit(inputData = inputCaseA,
-#' groupingVariables = c('cell_line','agent'))
+#' groupingVariables = c('cell_line','treatment'))
 #' defs = GRgetDefs(output1)
 #' # See all definitions (some will be truncated)
 #' \dontrun{View(defs)}

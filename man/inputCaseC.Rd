@@ -8,9 +8,7 @@
 A data frame with 1352 rows and 7 variables:
 \itemize{
   \item cell_line: the cell-line used (MCF10A, MCF7, BT20)
-  \item agent: the drug used (-, drugA, drugB, drugC, drugD)
-  \item pertubation: an example of another key variable (e.g different
-  media, a co-treatment, etc.) (0, 1)
+  \item treatment: the drug used (-, drugA, drugB, drugC, drugD)
   \item replicate: replicate number, (1, 2, 3)
   \item time: time of assay measured in hours (0, 48, 72)
   \item concentration: concentration of the perturbagen on which
@@ -39,7 +37,7 @@ the \code{\link{GRfit}} function when "case" is equal to "C".
 The input data for "Case C" of the \code{\link{GRfit}} function must be in
 this format with columns named "concentration", "cell_count",
 and "time" as well as columns for other key
-variables. The columns "cell_line", "agent", "perturbation", and
+variables. The columns "cell_line", "treatment", and
 "replicate", are simply examples of these key variables. It is not necessary
 that your input data frame include these exact column names or the same
 number of columns.

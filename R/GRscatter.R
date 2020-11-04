@@ -43,10 +43,10 @@
 #' head(inputCaseA)
 #' # Run GRfit function with case = "A"
 #' output1 = GRfit(inputData = inputCaseA,
-#' groupingVariables = c('cell_line','agent', 'perturbation','replicate',
+#' groupingVariables = c('cell_line','treatment','replicate',
 #' 'time'))
-#' GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB')
-#' GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB',
+#' GRscatter(output1, 'GR50', 'treatment', c('drugA','drugD'), 'drugB')
+#' GRscatter(output1, 'GR50', 'treatment', c('drugA','drugD'), 'drugB',
 #' plotly = FALSE)
 
 GRscatter = function(fitData, metric, variable, xaxis, yaxis, plotly = TRUE){

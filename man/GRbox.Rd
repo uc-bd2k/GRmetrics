@@ -77,10 +77,10 @@ data("inputCaseA")
 head(inputCaseA)
 # Run GRfit function with case = "A"
 output1 = GRfit(inputData = inputCaseA,
-groupingVariables = c('cell_line','agent', 'perturbation','replicate',
+groupingVariables = c('cell_line','treatment','replicate',
 'time'))
 GRbox(output1, metric ='GRinf',
-groupVariable = 'cell_line', pointColor = 'agent' , factors = c('BT20',
+groupVariable = 'cell_line', pointColor = 'treatment' , factors = c('BT20',
 'MCF10A'))
 GRbox(output1, metric ='GRinf',
 groupVariable = 'cell_line', pointColor = 'cell_line' ,
