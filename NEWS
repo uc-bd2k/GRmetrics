@@ -1,3 +1,12 @@
+CHANGES IN VERSION 1.17.1
+-------------------------
+
+- Re-wrote the internal function to convert "Case C" long format-type input 
+  to "Case A" short-form input. The new function uses dplyr to make it much
+  more readable and fixes a possible conversion error when extra columns are 
+  included, but not named as grouping variables.
+- Required "treatment" column in input data to match the GRcalculator app.
+
 CHANGES IN VERSION 1.3.3
 -------------------------
 

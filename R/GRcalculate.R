@@ -1,4 +1,4 @@
-.GRcalculate = function(inputData, groupingVariables, cap = FALSE, case = "A",
+GRcalculate = function(inputData, groupingVariables, cap = FALSE, case = "A",
                         initial_count){
   # declaring values NULL to avoid note on package check
   cell_count = NULL

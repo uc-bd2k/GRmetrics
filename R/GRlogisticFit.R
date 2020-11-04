@@ -1,4 +1,4 @@
-.GRlogisticFit = function(inputData, groupingVariables, force = FALSE,
+GRlogisticFit = function(inputData, groupingVariables, force = FALSE,
                           cap = FALSE) {
   # declaring values NULL to avoid note on package check
   #experiment = NULL

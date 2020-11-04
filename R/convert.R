@@ -1,4 +1,4 @@
-.convert = function(inputData, case, initial_count, groupingVariables) {
+convert = function(inputData, case, initial_count, groupingVariables) {
   ## if case == "A", don't do anything
   if (case == "A") { return(inputData) }
   ## accept "B" or "C" for long-format case
@@ -29,8 +29,8 @@
     ### un-comment next line to delete extra columns not specified as grouping variables
     #trt_df = trt_df %>% dplyr::select(-all_of(delete_cols))
     ### join data frames
-    caseA_output = trt_df %>% dplyr::full_join(ctrl_df_avg, by = ctrl_keys) %>%
-      dplyr::full_join(time0_df_avg, by = time0_keys) %>%
+    caseA_output = trt_df %>% dplyr::left_join(ctrl_df_avg, by = ctrl_keys) %>%
+      dplyr::left_join(time0_df_avg, by = time0_keys) %>%
       dplyr::arrange(across(all_of(ctrl_keys)))
     ### delete cell_count__time0 column if case initial_count == FALSE
     if (!initial_count) { caseA_output$cell_count__time0 = NULL }

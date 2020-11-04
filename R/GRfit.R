@@ -188,10 +188,10 @@ GRfit = function(inputData, groupingVariables, case = "A",
   message = input_check[[1]]
   initial_count = input_check[[2]]
   if(!is.null(message)) stop(message)
-  inputData = .convert(inputData, case, initial_count, groupingVariables)
-  gr_table = .GRcalculate(inputData, groupingVariables, cap, case,
+  inputData = convert(inputData, case, initial_count, groupingVariables)
+  gr_table = GRcalculate(inputData, groupingVariables, cap, case,
                           initial_count)
-  parameter_table = .GRlogisticFit(gr_table, groupingVariables, force, cap)
+  parameter_table = GRlogisticFit(gr_table, groupingVariables, force, cap)
 
   colData = parameter_table[ ,c(groupingVariables, 'fit_GR', 'fit_rel_cell',
                                 'experiment', 'concentration_points')]

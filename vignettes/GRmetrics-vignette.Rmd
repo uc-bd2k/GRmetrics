@@ -45,13 +45,12 @@ data with these new metrics across multiple conditions and cell lines.
 
 The **GRmetrics** package can be installed through Bioconductor
 
-```r
-if (!requireNamespace("BiocManager", quietly=TRUE))
-    install.packages("BiocManager")
+```{r eval=FALSE}
+install.packages("BiocManager")
 BiocManager::install("GRmetrics")
 ```
 
-#References:
+# References:
 Hafner, M., Niepel, M. Chung, M. and Sorger, P.K., *Growth Rate Inhibition 
 Metrics Correct For Confounders In Measuring Sensitivity To Cancer Drugs*. 
 Nature Methods 13.6 (2016): 521-527.
@@ -59,10 +58,10 @@ Nature Methods 13.6 (2016): 521-527.
 
 Corresponding MATLAB and Python scripts available on repo:
 
-https://github.com/sorgerlab/gr50_tools.
+https://github.com/datarail/gr_metrics.
 
 Note: Most, but not all of these scripts have been reproduced in this R 
-package. Namely, this package does not contain code for "Case B" of the 
+package. Namely, this package does not contain code for "Case C" of the 
 MATLAB scripts nor does it contain an R script to generate the example input 
 data. The python script for generating the example data can be found in the 
 "inst/scripts/" directory.
@@ -73,7 +72,7 @@ Much of the description below has been adapted from:
 
 https://github.com/datarail/gr_metrics/blob/master/README.md.
 
-#Input data
+# Input data
 The main function of the package is **GRfit**, which takes in a data frame 
 containing information about concentration, cell counts over time, and 
 additional grouping variables for a dose-response assay and calculates 
@@ -82,7 +81,7 @@ growth-rate inhibition (GR) metrics for each experiment in the dataset.
 There are two cases of data input accepted by the **GRfit** function. 
 They are described in detail below. Case "A" is the default option.
 
-##Case A: a single file with control values assigned to treated measurements
+## Case A: a single file with control values assigned to treated measurements
 The control values (both control and time 0 cell counts) are pre-computed by 
 the user and assigned to each treatment (row) in appropriate columns in the 
 input file. Control cell counts should be in a column labeled 
@@ -92,32 +91,36 @@ input file. Control cell counts should be in a column labeled
 An example input data frame for "Case A", named "inputCaseA", is contained 
 within the package.
 To access it, use the following code:
- 
-```r
+
+```{r include=FALSE}
 library(GRmetrics)
 data(inputCaseA)
 ```
 
-**The mandatory inputs for Case "A" are:**
+```{r eval=FALSE}
+library(GRmetrics)
+data(inputCaseA)
+```
+
+**The mandatory inputs for "Case A" (short-format input) are:**
 
 - **inputData** - the name of an input data frame with the following columns 
 as well as other grouping columns
-    1. **concentration** - column with concentration values 
-(not log transformed) of the perturbagen on which dose-response curves will be 
-evaluated
-    2. **cell_count** - column with the measure of cell number 
-(or a surrogate of cell number) after treatment
-    3. **cell_count\_\_time0** - column with initial (Time 0) cell 
+    1. **cell_line** - name of the cell line used in the experiment
+    2. **treatment** - name of the treatment used in the experiment (use a dash "-" for untreated "control" measurements)
+    3. **concentration** - concentration value (not log-transformed) of the treatment - use 0 for untreated measurements - concentrations for other measurements must be positive numbers
+    4. **cell_count** - measure of cell number (or a surrogate of cell number) at the end of treatment
+    5. **cell_count\_\_time0** - column with initial (Time 0) cell 
     counts - the measure of cell number in untreated wells grown in parallel 
     until the time of treatment
-    4. **cell_count\_\_ctrl** - column with the Control cell 
+    6. **cell_count\_\_ctrl** - column with the Control cell 
   count: the measure of cell number in control (e.g. untreated or 
-  DMSO-treated) wells from the same plate
+  DMSO-treated) wells from the same plate at the end of treatment
 
-All other columns will be treated as additional keys on which the data will be 
-grouped (e.g. *cell_line*, *drug*, *time*, *replicate*)
+Other columns (e.g. *replicate*, *condition*, etc.) may be added for additional 
+metadata and to group the experiments.
 
-##Case C: a single file with control values stacked with treated measurements
+## Case C: a single file with control values stacked with treated measurements
 In the most general case, the control cell counts are in the same file and 
 format as the treated cell counts. Control cell counts will be averaged (using 
 a 50%-trimmed mean) and automatically matched to the treated cell counts based 
@@ -132,27 +135,26 @@ An example input data frame for "Case C", named "inputCaseC", is contained
 within the package.
 To access it, use the following code:
  
-```r
-library(GRmetrics)
+```{r}
 data(inputCaseC)
 ```
 
-**The mandatory inputs for Case "C" are:**
+**The mandatory inputs for "Case C" (long-format input) are:**
 
 - **inputData** - the name of an input data frame with the following columns 
 as well as other grouping columns
-    1. **concentration** - column with concentration values 
-(not log transformed) of the perturbagen on which dose-response curves 
-will be evaluated
-    2. **cell_count** - column with the measure of cell number 
-    (or a surrogate of cell number)
-    3. **time** - column with the time at which a cell count is 
-observed
+    1. **cell_line** - name of the cell line used in the experiment
+    2. **treatment** - name of the treatment used in the experiment (use a dash "-" for untreated "control" measurements)
+    3. **concentration** - concentration value (not log-transformed) of the treatment - use 0 for untreated measurements - concentrations for other measurements must be positive numbers
+    4. **cell_count** - measure of cell number (or a surrogate of cell number)
+    5. **time** - time of cell number measurement - use 0 for measurements at the beginning of the assay. For measurements at the end of the assay, use the length of the assay after treatment, e.g. "72", for a typical 3-day (72 hour) assay.
+    
+    (Note: time-course calculations have not been implemented yet, all measurements must be at the time of treatment or at the end of the assay.)
 
-All other columns will be treated as additional keys on which the data will be 
-grouped (e.g. *cell_line*, *drug*, *replicate*)
+Other columns (e.g. *replicate*, *condition*, etc.) may be added for additional 
+metadata and to group the experiments.
 
-##Functions
+## Functions
 The package contains 3 visualization functions: **GRdrawDRC**, **GRscatter**, 
 and **GRbox**.
 
@@ -189,31 +191,19 @@ that are not averaged over.
 
 # Examples
 
-```{r, include = FALSE}
-## Case A (DRC examples)
-library(GRmetrics)
-```
 Load example data (Case A)
 ```{r}
 data(inputCaseA)
 ```
 
-```{r, include = FALSE}
-inputCaseA = as.data.frame(inputCaseA)
-```
-
-```{r}
-head(inputCaseA)
-```
-
 Calculate GR values and solve for GR metrics parameters (i.e. fit curves)
 
-```{r, include = FALSE}
-drc_output = GRfit(inputCaseA, groupingVariables = c('cell_line','agent'))
+```{r include=FALSE}
+drc_output = GRfit(inputCaseA, groupingVariables = c('cell_line','treatment'))
 ```
 
-```r
-drc_output = GRfit(inputCaseA, groupingVariables = c('cell_line','agent'))
+```{r eval=FALSE}
+drc_output = GRfit(inputCaseA, groupingVariables = c('cell_line','treatment'))
 ```
 See overview of output data (SummarizedExperiment object)
 
@@ -224,19 +214,19 @@ drc_output
 Review output table of GR metrics parameters
 
 ```{r}
-head(GRgetMetrics(drc_output))
+drc_output %>% GRgetMetrics() %>% head()
 ```
 
 View descriptions of each GR metric (or goodness of fit measure)
 
-```
-View(GRgetDefs(drc_output))
+```{r}
+drc_output %>% GRgetDefs() %>% head()
 ```
 
 Review output table of GR values
 
 ```{r}
-head(GRgetValues(drc_output))
+drc_output %>% GRgetValues() %>% head()
 ```
 
 View grouping variables used for calculation
@@ -244,8 +234,9 @@ View grouping variables used for calculation
 ```{r}
 GRgetGroupVars(drc_output)
 ```
+
 You can also export your results. Here are two examples:
-```r
+```{r eval=FALSE}
 # Write GR metrics parameter table to tab-separated text file
 write.table(GRgetMetrics(drc_output), file = "filename.tsv", quote = FALSE,
 sep = "\t", row.names = FALSE)
@@ -254,9 +245,8 @@ write.table(GRgetValues(drc_output), file = "filename.csv", quote = FALSE,
 sep = ",", row.names = FALSE)
 ```
 
-#Visualizations
-You can draw GR dose-response curves with plotly or with ggplot2. You can also 
-specify the range of the graph.
+# Visualizations
+You can draw GR dose-response curves as an interactive plot (via the plotly package) or a static plot (via the ggplot2 package). By default, an interactive plot is displayed, but you can make a static plot by using "plotly = FALSE". You can also specify the range of the graph with the "min" and "max" parameters.
 ```{r}
 # Draw dose-response curves
 GRdrawDRC(drc_output)
@@ -268,55 +258,39 @@ GRdrawDRC(drc_output, experiments = c('BT20 drugA', 'MCF10A drugA',
 GRdrawDRC(drc_output, plotly = FALSE)
 ```
 
-You can also draw scatterplots and boxplots of GR metrics with plotly or 
-ggplot2. 
+You can also draw scatterplots and boxplots of GR metrics with plotly or ggplot2. 
 Here is an example using example data in the format of Case C.
-```{r}
-## Case C (scatterplot and boxplot examples)
-data(inputCaseC)
+
+```{r include=FALSE}
+output1 = GRfit(inputData = inputCaseC, groupingVariables = c('cell_line','treatment'), case = "C")
 ```
 
-```{r, include = FALSE}
-inputCaseC = as.data.frame(inputCaseC)
-```
-
-```{r}
-head(inputCaseC)
-```
-
-```{r, include = FALSE}
-output1 = GRfit(inputData = inputCaseC, groupingVariables = 
-                  c('cell_line','agent', 'perturbation', 'replicate', 'time'), 
-                case = "C")
-```
-
-```r
-output1 = GRfit(inputData = inputCaseC, groupingVariables = 
-c('cell_line','agent', 'perturbation', 'replicate', 'time'), case = "C")
+```{r eval=FALSE}
+output1 = GRfit(inputData = inputCaseC, groupingVariables = c('cell_line','treatment'), case = "C")
 ```
 
 ```{r}
 # Draw scatterplots
-GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB')
-GRscatter(output1, 'GR50', 'agent', c('drugA','drugD'), 'drugB', 
+GRscatter(output1, 'GR50', 'treatment', c('drugA','drugD'), 'drugB')
+GRscatter(output1, 'GR50', 'treatment', c('drugA','drugD'), 'drugB', 
           plotly = FALSE)
 
 # Draw boxplots
 GRbox(output1, metric ='GRinf', groupVariable = 'cell_line', 
-      pointColor = 'agent')
+      pointColor = 'treatment')
 GRbox(output1, metric ='GRinf', groupVariable = 'cell_line', 
-      pointColor = 'agent',
+      pointColor = 'treatment',
       factors = c('BT20', 'MCF10A'))
 GRbox(output1, metric ='GRinf', groupVariable = 'cell_line', 
-      pointColor = 'agent',
+      pointColor = 'treatment',
       factors = c('BT20', 'MCF10A'), plotly = FALSE)
 GRbox(output1, metric ='GR50', groupVariable = 'cell_line', 
-      pointColor = 'agent', wilA = 'BT20', wilB = c('MCF7', 'MCF10A'),
+      pointColor = 'treatment', wilA = 'BT20', wilB = c('MCF7', 'MCF10A'),
       plotly = FALSE)
 
 ```
 
-#GR metric details
+# GR metric details
 We have developed scripts to calculate normalized growth rate inhibition (GR) 
 values and corresponding metrics (GR50, GRmax, ...) based on cell counts 
 measured in dose-response experiments. Users provide a tab-separated data file 
